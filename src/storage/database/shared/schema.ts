@@ -93,6 +93,23 @@ export const entryVersions = pgTable(
 	]
 );
 
+// 条目评论
+export const entryComments = pgTable(
+	"entry_comments",
+	{
+		id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+		entry_id: varchar("entry_id", { length: 36 }).notNull().references(() => knowledgeEntries.id, { onDelete: "cascade" }),
+		author: varchar("author", { length: 50 }).default("匿名用户"),
+		content: text("content").notNull(),
+		is_merged: boolean("is_merged").default(false).notNull(),
+		created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("entry_comments_entry_id_idx").on(table.entry_id),
+		index("entry_comments_created_at_idx").on(table.created_at),
+	]
+);
+
 // 问答历史记录
 export const qaHistory = pgTable(
 	"qa_history",

@@ -21,10 +21,16 @@ import {
   fetchEntryVersions,
   importWord,
   downloadTemplate,
+  fetchEntryComments,
+  addEntryComment,
+  deleteEntryComment,
+  rateEntry,
+  mergeCommentToAnswer,
   type KnowledgeEntry,
   type Category,
   type Tag,
   type EntryVersion,
+  type EntryComment,
 } from '@/lib/api';
 
 export function KnowledgeList() {
@@ -68,6 +74,14 @@ export function KnowledgeList() {
     entries: Array<{ id: string; question: string; answers_count?: number; action: 'created' | 'updated' | 'skipped' }>;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Comment & Rating states
+  const [comments, setComments] = useState<EntryComment[]>([]);
+  const [commentAuthor, setCommentAuthor] = useState('');
+  const [commentContent, setCommentContent] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [mergingCommentId, setMergingCommentId] = useState<string | null>(null);
+  const [hoverScore, setHoverScore] = useState(0);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -163,6 +177,11 @@ export function KnowledgeList() {
 
   const openDetail = (entry: KnowledgeEntry) => {
     setSelectedEntry(entry);
+    setComments([]);
+    setCommentAuthor('');
+    setCommentContent('');
+    setHoverScore(0);
+    loadComments(entry.id);
     setShowDetail(true);
   };
 
@@ -224,6 +243,74 @@ export function KnowledgeList() {
     setImportResult(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const loadComments = async (entryId: string) => {
+    try {
+      const res = await fetchEntryComments(entryId);
+      setComments(res.data ?? []);
+    } catch (err) {
+      console.error('加载评论失败:', err);
+      setComments([]);
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!selectedEntry || !commentContent.trim()) return;
+    setSubmittingComment(true);
+    try {
+      await addEntryComment(selectedEntry.id, {
+        author: commentAuthor.trim() || undefined,
+        content: commentContent.trim(),
+      });
+      setCommentContent('');
+      await loadComments(selectedEntry.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '添加评论失败');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!selectedEntry || !confirm('确定删除此评论？')) return;
+    try {
+      await deleteEntryComment(selectedEntry.id, commentId);
+      await loadComments(selectedEntry.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '删除评论失败');
+    }
+  };
+
+  const handleRate = async (score: number) => {
+    if (!selectedEntry) return;
+    try {
+      await rateEntry(selectedEntry.id, score);
+      setSelectedEntry({ ...selectedEntry, effectiveness_score: score });
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '评分失败');
+    }
+  };
+
+  const handleMergeComment = async (commentId: string) => {
+    if (!selectedEntry) return;
+    setMergingCommentId(commentId);
+    try {
+      const res = await mergeCommentToAnswer(selectedEntry.id, commentId);
+      // Update the selected entry with the new answer
+      setSelectedEntry({
+        ...selectedEntry,
+        answer: res.data.new_answer,
+        current_version: res.data.new_version,
+      });
+      await loadComments(selectedEntry.id);
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '合并失败');
+    } finally {
+      setMergingCommentId(null);
     }
   };
 
@@ -609,15 +696,22 @@ export function KnowledgeList() {
             <DialogTitle>话术详情</DialogTitle>
           </DialogHeader>
           {selectedEntry && (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Question */}
               <div>
                 <Label className="text-slate-500">问题</Label>
                 <p className="mt-1 text-slate-800 font-medium">{selectedEntry.question}</p>
               </div>
+
+              {/* Answer */}
               <div>
                 <Label className="text-slate-500">回复话术</Label>
-                <p className="mt-1 text-slate-700 whitespace-pre-wrap">{selectedEntry.answer}</p>
+                <div className="mt-1 p-3 bg-slate-50 rounded-lg text-slate-700 whitespace-pre-wrap text-sm leading-relaxed max-h-[300px] overflow-y-auto">
+                  {selectedEntry.answer}
+                </div>
               </div>
+
+              {/* Category & Status */}
               <div className="flex items-center gap-4">
                 <div>
                   <Label className="text-slate-500">分类</Label>
@@ -638,6 +732,8 @@ export function KnowledgeList() {
                   </p>
                 </div>
               </div>
+
+              {/* Tags */}
               <div>
                 <Label className="text-slate-500">标签</Label>
                 <div className="flex gap-2 mt-1 flex-wrap">
@@ -655,10 +751,155 @@ export function KnowledgeList() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-6 text-sm text-slate-500">
-                <span>使用次数: {selectedEntry.usage_count}</span>
-                <span>效果评分: {selectedEntry.effectiveness_score}/5</span>
-                <span>当前版本: v{selectedEntry.current_version}</span>
+
+              {/* Rating Section */}
+              <div className="flex items-center gap-6">
+                <div>
+                  <Label className="text-slate-500">效果评分</Label>
+                  <div className="flex items-center gap-1 mt-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        className="text-xl transition-colors focus:outline-none"
+                        style={{
+                          color: star <= (hoverScore || selectedEntry.effectiveness_score)
+                            ? '#f59e0b'
+                            : '#cbd5e1',
+                        }}
+                        onMouseEnter={() => setHoverScore(star)}
+                        onMouseLeave={() => setHoverScore(0)}
+                        onClick={() => handleRate(star)}
+                        title={`评 ${star} 分`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                    <span className="text-sm text-slate-500 ml-2">
+                      {selectedEntry.effectiveness_score > 0
+                        ? `${selectedEntry.effectiveness_score}/5`
+                        : '未评分'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-sm text-slate-400">
+                  使用 {selectedEntry.usage_count} 次 · v{selectedEntry.current_version}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-slate-200" />
+
+              {/* Comments Section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-slate-700 font-medium">
+                    评论区 ({comments.length})
+                  </Label>
+                </div>
+
+                {/* Comment Input */}
+                <div className="bg-white border border-slate-200 rounded-lg p-3 mb-3 space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={commentAuthor}
+                      onChange={(e) => setCommentAuthor(e.target.value)}
+                      placeholder="你的名字（选填）"
+                      className="w-[140px] text-sm"
+                    />
+                    <Input
+                      value={commentContent}
+                      onChange={(e) => setCommentContent(e.target.value)}
+                      placeholder="分享你的使用经验或建议..."
+                      className="flex-1 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && commentContent.trim()) {
+                          e.preventDefault();
+                          handleAddComment();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      className="bg-cyan-600 hover:bg-cyan-700 text-sm"
+                      disabled={!commentContent.trim() || submittingComment}
+                      onClick={handleAddComment}
+                    >
+                      {submittingComment ? '提交中...' : '发表评论'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Comment List */}
+                {comments.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 text-sm">
+                    暂无评论，来分享你的使用经验吧
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                    {comments.map((comment) => (
+                      <div
+                        key={comment.id}
+                        className={`p-3 rounded-lg border ${
+                          comment.is_merged
+                            ? 'bg-emerald-50 border-emerald-200'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium text-slate-700">
+                                {comment.author}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                {new Date(comment.created_at).toLocaleString('zh-CN')}
+                              </span>
+                              {comment.is_merged && (
+                                <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 px-1.5 py-0">
+                                  已合并到答案
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-600 whitespace-pre-wrap">
+                              {comment.content}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!comment.is_merged && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 text-xs h-7 px-2"
+                                disabled={mergingCommentId === comment.id}
+                                onClick={() => handleMergeComment(comment.id)}
+                                title="将此评论内容追加到回复话术中"
+                              >
+                                {mergingCommentId === comment.id ? '合并中...' : (
+                                  <>
+                                    <svg className="w-3.5 h-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                    </svg>
+                                    合并到答案
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-400 hover:text-red-600 hover:bg-red-50 text-xs h-7 px-2"
+                              onClick={() => handleDeleteComment(comment.id)}
+                            >
+                              删除
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

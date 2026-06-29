@@ -230,6 +230,15 @@ export interface EntryVersion {
   created_at: string;
 }
 
+export interface EntryComment {
+  id: string;
+  entry_id: string;
+  author: string;
+  content: string;
+  is_merged: boolean;
+  created_at: string;
+}
+
 export async function importWord(data: {
   file: File;
   category_id?: string;
@@ -251,6 +260,64 @@ export async function importWord(data: {
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || '导入失败');
+  }
+  return res.json();
+}
+
+// ===== 评论功能 =====
+
+export async function fetchEntryComments(entryId: string) {
+  const res = await fetch(`${API_BASE}/knowledge/${entryId}/comments`);
+  if (!res.ok) throw new Error('获取评论失败');
+  return res.json();
+}
+
+export async function addEntryComment(entryId: string, data: { author?: string; content: string }) {
+  const res = await fetch(`${API_BASE}/knowledge/${entryId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '添加评论失败');
+  }
+  return res.json();
+}
+
+export async function deleteEntryComment(entryId: string, commentId: string) {
+  const res = await fetch(`${API_BASE}/knowledge/${entryId}/comments?comment_id=${commentId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '删除评论失败');
+  }
+  return res.json();
+}
+
+export async function rateEntry(entryId: string, effectiveness_score: number) {
+  const res = await fetch(`${API_BASE}/knowledge/${entryId}/rate`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ effectiveness_score }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '评分失败');
+  }
+  return res.json();
+}
+
+export async function mergeCommentToAnswer(entryId: string, commentId: string) {
+  const res = await fetch(`${API_BASE}/knowledge/${entryId}/merge-comment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comment_id: commentId }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '合并评论到答案失败');
   }
   return res.json();
 }
