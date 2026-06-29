@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClientWithRetry } from '@/lib/supabase-browser';
 import { useSupabaseConfig } from '@/lib/supabase-config-inject';
-import Image from 'next/image';
-
 export default function LoginPage() {
   const router = useRouter();
   const { isLoading: configLoading } = useSupabaseConfig();
@@ -61,13 +59,11 @@ export default function LoginPage() {
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
           {/* App icon & name */}
           <div className="flex flex-col items-center mb-8">
-            <Image
-              src="https://coze-coding-project.tos.coze.site/gen_project_icon/2026-06-29/7656657912823234601_1782705681.png?sign=4904783109-99b7ad1906-0-9d2bd2952a436718cf5b36e6a1a6bb4f5dc11175c1156b808598e72b230d6a5d"
-              alt="询盘AI问答知识库"
-              width={56}
-              height={56}
-              className="rounded-xl mb-3"
-            />
+            <div className="w-14 h-14 rounded-xl bg-cyan-600 flex items-center justify-center mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </div>
             <h1 className="text-xl font-bold text-slate-800">询盘AI问答知识库</h1>
           </div>
 
