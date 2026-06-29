@@ -495,7 +495,7 @@ export function KnowledgeList() {
           {entries.map((entry) => (
             <Card
               key={entry.id}
-              className={`bg-white hover:shadow-md transition-shadow cursor-pointer border-l-4 ${
+              className={`bg-white hover:shadow-md transition-shadow cursor-pointer border-l-4 isolate ${
                 entry.is_active ? 'border-l-cyan-500' : 'border-l-slate-300'
               }`}
               onClick={() => openDetail(entry)}
@@ -511,8 +511,8 @@ export function KnowledgeList() {
                         <Badge variant="secondary" className="text-xs">已停用</Badge>
                       )}
                     </div>
-                    <div className="relative group/answer" onCopy={() => handleTextCopy(entry)}>
-                      <p className="text-sm text-slate-500 line-clamp-2 pr-8">
+                    <div className="relative group/answer isolate" onCopy={() => handleTextCopy(entry)}>
+                      <p className="text-sm text-slate-500 line-clamp-2 pr-8 overflow-hidden">
                         {entry.answer}
                       </p>
                       <button
@@ -801,7 +801,7 @@ export function KnowledgeList() {
                     )}
                   </Button>
                 </div>
-                <div className="mt-1 p-3 bg-slate-50 rounded-lg text-slate-700 whitespace-pre-wrap text-sm leading-relaxed max-h-[300px] overflow-y-auto" onCopy={() => handleTextCopy(selectedEntry)}>
+                <div className="mt-1 p-3 bg-slate-50 rounded-lg text-slate-700 whitespace-pre-wrap text-sm leading-relaxed max-h-[300px] overflow-y-auto isolate" onCopy={() => handleTextCopy(selectedEntry)}>
                   {selectedEntry.answer}
                 </div>
               </div>
@@ -957,7 +957,7 @@ export function KnowledgeList() {
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-sm text-slate-600 whitespace-pre-wrap">
+                            <p className="text-sm text-slate-600 whitespace-pre-wrap isolate">
                               {comment.content}
                             </p>
                           </div>
@@ -1029,7 +1029,7 @@ export function KnowledgeList() {
                       </div>
                       <div>
                         <span className="text-slate-500">回复: </span>
-                        <span className="text-slate-700 line-clamp-3">{v.answer}</span>
+                        <span className="text-slate-700 line-clamp-3 overflow-hidden isolate">{v.answer}</span>
                       </div>
                       <p className="text-xs text-slate-400">
                         {new Date(v.created_at).toLocaleString('zh-CN')}
