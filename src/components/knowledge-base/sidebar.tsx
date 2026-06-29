@@ -4,8 +4,8 @@ import { useAuth } from '@/lib/auth-context';
 import { useState, useEffect } from 'react';
 
 interface Enterprise {
-  id: string;
-  name: string;
+  enterprise_id: string;
+  enterprise_name: string;
   invite_code: string;
   role: 'owner' | 'admin' | 'member';
 }
@@ -53,10 +53,10 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         setEnterprises(ents);
         // Load current enterprise from localStorage
         const savedId = localStorage.getItem('current_enterprise_id');
-        const found = ents.find((e) => e.id === savedId);
+        const found = ents.find((e) => e.enterprise_id === savedId);
         setCurrentEnterprise(found || ents[0] || null);
         if (found || ents[0]) {
-          localStorage.setItem('current_enterprise_id', (found || ents[0]).id);
+          localStorage.setItem('current_enterprise_id', (found || ents[0]).enterprise_id);
         }
       }
     } catch {
@@ -66,7 +66,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
   const handleSwitchEnterprise = (ent: Enterprise) => {
     setCurrentEnterprise(ent);
-    localStorage.setItem('current_enterprise_id', ent.id);
+    localStorage.setItem('current_enterprise_id', ent.enterprise_id);
     setShowEnterpriseDropdown(false);
     // Reload page to refresh data with new enterprise context
     window.location.reload();
@@ -145,7 +145,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-sm"
           >
             <span className="truncate">
-              {currentEnterprise ? currentEnterprise.name : '未加入企业'}
+              {currentEnterprise ? currentEnterprise.enterprise_name : '未加入企业'}
             </span>
             <svg className="w-4 h-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -156,13 +156,13 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 rounded-lg shadow-lg z-50 overflow-hidden">
               {enterprises.map((ent) => (
                 <button
-                  key={ent.id}
+                  key={ent.enterprise_id}
                   onClick={() => handleSwitchEnterprise(ent)}
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 transition-colors ${
-                    currentEnterprise?.id === ent.id ? 'text-cyan-400' : 'text-slate-200'
+                    currentEnterprise?.enterprise_id === ent.enterprise_id ? 'text-cyan-400' : 'text-slate-200'
                   }`}
                 >
-                  <span className="truncate block">{ent.name}</span>
+                  <span className="truncate block">{ent.enterprise_name}</span>
                   {ent.role === 'owner' && (
                     <span className="text-[10px] text-amber-400">创建者</span>
                   )}
