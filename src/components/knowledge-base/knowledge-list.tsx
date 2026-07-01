@@ -141,7 +141,7 @@ export function KnowledgeList() {
       await createKnowledge({
         question: formQuestion,
         answer: formAnswer,
-        category_id: formCategory || undefined,
+        category_id: formCategory === '__none__' ? null : (formCategory || null),
         tag_ids: formTags,
       });
       setShowCreate(false);
@@ -158,7 +158,7 @@ export function KnowledgeList() {
       await updateKnowledge(selectedEntry.id, {
         question: formQuestion,
         answer: formAnswer,
-        category_id: formCategory || undefined,
+        category_id: formCategory === '__none__' ? null : (formCategory || null),
         tag_ids: formTags,
         change_note: formChangeNote || undefined,
       });

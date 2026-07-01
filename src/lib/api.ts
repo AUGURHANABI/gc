@@ -115,7 +115,7 @@ export async function deleteTag(id: string) {
 }
 
 export async function fetchKnowledge(params?: {
-  category_id?: string;
+  category_id?: string | null;
   tag_id?: string;
   search?: string;
   page?: number;
@@ -144,7 +144,7 @@ export async function fetchKnowledgeById(id: string) {
 export async function createKnowledge(data: {
   question: string;
   answer: string;
-  category_id?: string;
+  category_id?: string | null;
   tag_ids?: string[];
 }) {
   const res = await authFetch(`${API_BASE}/knowledge`, {
@@ -162,7 +162,7 @@ export async function createKnowledge(data: {
 export async function updateKnowledge(id: string, data: {
   question?: string;
   answer?: string;
-  category_id?: string;
+  category_id?: string | null;
   tag_ids?: string[];
   is_active?: boolean;
   change_note?: string;
@@ -288,7 +288,7 @@ export interface EntryComment {
 
 export async function importWord(data: {
   file: File;
-  category_id?: string;
+  category_id?: string | null;
   tag_ids?: string[];
 }) {
   const formData = new FormData();
