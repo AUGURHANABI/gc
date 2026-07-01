@@ -945,7 +945,22 @@ export function KnowledgeList() {
 
       {/* Detail Dialog */}
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => {
+            // Allow interaction with Popover content inside the Dialog
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-radix-popper-content-wrapper]')) {
+              e.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-radix-popper-content-wrapper]')) {
+              e.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>话术详情</DialogTitle>
           </DialogHeader>
@@ -1095,7 +1110,11 @@ export function KnowledgeList() {
                           </svg>
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-56 p-2" align="start">
+                      <PopoverContent
+                        className="w-56 p-2 z-[200]"
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <div className="space-y-1">
                           {categories.length > 0 && (
                             <>
@@ -1154,7 +1173,7 @@ export function KnowledgeList() {
                         <Badge
                           className="bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors pr-6"
                         >
-                          {categories.find(c => c.id === detailCategory)?.name || '未知分类'}
+                          {categories.find(c => c.id === detailCategory)?.name || selectedEntry.categories?.name || '未知分类'}
                         </Badge>
                         <button
                           className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-300 text-white hover:bg-red-400 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"
@@ -1196,7 +1215,11 @@ export function KnowledgeList() {
                         </svg>
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-56 p-2" align="start">
+                    <PopoverContent
+                      className="w-56 p-2 z-[200]"
+                      align="start"
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
                       <div className="space-y-1">
                         {tags.length > 0 && (
                           <>
