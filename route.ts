@@ -101,7 +101,6 @@ export async function POST(req: NextRequest) {
         });
 
         if (!response.ok) {
-          const errText = await response.text().catch(() => '');
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ error: `API 请求失败 (${response.status})` })}\n\n`)
           );
@@ -160,18 +159,19 @@ export async function POST(req: NextRequest) {
           historyInsert.enterprise_id = enterpriseId;
         }
 
-        client.from('qa_history').insert(historyInsert).then(() => {}).catch(() => {});
+        // Use void with then() for fire-and-forget (avoids TypeScript catch() issue)
+        void client.from('qa_history').insert(historyInsert).then(() => {});
 
         // Update usage count for matched entry
         if (matchedEntryId) {
-          client
+          void client
             .from('knowledge_entries')
             .select('usage_count')
             .eq('id', matchedEntryId)
             .maybeSingle()
             .then(({ data: entry }) => {
               if (entry) {
-                client
+                void client
                   .from('knowledge_entries')
                   .update({ usage_count: (entry.usage_count as number) + 1 })
                   .eq('id', matchedEntryId)
