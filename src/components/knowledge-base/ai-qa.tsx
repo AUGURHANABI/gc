@@ -175,25 +175,25 @@ export function AIQA() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">AI 智能问答</h2>
-          <p className="text-sm text-slate-500 mt-1">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
+        <div className="min-w-0 flex-1 mr-3">
+          <h2 className="text-lg md:text-2xl font-bold text-slate-800">AI 智能问答</h2>
+          <p className="text-xs md:text-sm text-slate-500 mt-0.5 md:mt-1">
             基于知识库的专业询盘回复话术生成
           </p>
         </div>
-        <Button variant="outline" onClick={loadHistory}>
+        <Button variant="outline" size="sm" className="shrink-0" onClick={loadHistory}>
           历史记录
         </Button>
       </div>
 
       {/* Chat Area */}
-      <div className="bg-white rounded-lg border border-slate-200 min-h-[500px] max-h-[600px] overflow-y-auto flex flex-col">
+      <div className="bg-white rounded-lg border border-slate-200 min-h-[300px] md:min-h-[500px] max-h-[60vh] md:max-h-[600px] overflow-y-auto flex flex-col">
         {messages.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-slate-400">
             <div className="text-center">
-              <p className="text-lg mb-2">输入您的询盘问题</p>
-              <p className="text-sm">AI 将结合知识库为您生成专业的回复话术</p>
+              <p className="text-base md:text-lg mb-2">输入您的询盘问题</p>
+              <p className="text-xs md:text-sm">AI 将结合知识库为您生成专业的回复话术</p>
             </div>
           </div>
         ) : (
@@ -247,7 +247,7 @@ export function AIQA() {
       </div>
 
       {/* Input Area */}
-      <div className="mt-4 flex gap-3">
+      <div className="mt-3 md:mt-4 flex gap-2 md:gap-3">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -258,14 +258,15 @@ export function AIQA() {
             }
           }}
           placeholder={canAsk ? "输入询盘问题，例如：客户询问交期怎么回复？" : "您没有AI问答权限，请联系管理员开通"}
-          className="bg-white flex-1"
+          className="bg-white flex-1 text-sm md:text-base"
           rows={2}
           disabled={isStreaming || !canAsk}
         />
         <Button
           onClick={handleSubmit}
           disabled={isStreaming || !input.trim() || !canAsk}
-          className="bg-cyan-600 hover:bg-cyan-700 self-end"
+          className="bg-cyan-600 hover:bg-cyan-700 self-end shrink-0"
+          size="sm"
         >
           {isStreaming ? '生成中...' : '发送'}
         </Button>

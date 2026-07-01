@@ -14,6 +14,8 @@ interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: 'knowledge' | 'qa' | 'categories' | 'tags' | 'statistics' | 'permissions') => void;
   isAdmin?: boolean;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const navItems = [
@@ -24,10 +26,11 @@ const navItems = [
   { id: 'statistics' as const, label: '数据统计', icon: '📊' },
 ];
 
-const adminNavItem = { id: 'permissions' as const, label: '权限设置', icon: '⚙️' };
+const adminNavItem = { id: 'permissions' as const, label: '权限设置', icon: '🔐' };
 
-export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, isAdmin, mobileOpen, onMobileClose }: SidebarProps) {
   const { user, session, signOut } = useAuth();
+  const token = session?.access_token ?? null;
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [currentEnterprise, setCurrentEnterprise] = useState<Enterprise | null>(null);
   const [showEnterpriseDropdown, setShowEnterpriseDropdown] = useState(false);
@@ -37,29 +40,23 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
   const [newEnterpriseName, setNewEnterpriseName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const token = session?.access_token ?? '';
-
   useEffect(() => {
-    if (token) {
-      loadEnterprises();
-    }
+    loadEnterprises();
   }, [token]);
 
   const loadEnterprises = async () => {
+    if (!token) return;
     try {
       const res = await fetch('/api/enterprises', {
-        headers: token ? { 'x-session': token } : {},
+        headers: { 'x-session': token },
       });
-      if (res.ok) {
-        const data = await res.json();
-        const ents = (data.data ?? []) as Enterprise[];
-        setEnterprises(ents);
-        // Load current enterprise from localStorage
+      const data = await res.json();
+      if (data.data) {
+        setEnterprises(data.data);
         const savedId = localStorage.getItem('current_enterprise_id');
-        const found = ents.find((e) => e.enterprise_id === savedId);
-        setCurrentEnterprise(found || ents[0] || null);
-        if (found || ents[0]) {
-          localStorage.setItem('current_enterprise_id', (found || ents[0]).enterprise_id);
+        const found = data.data.find((e: Enterprise) => e.enterprise_id === savedId);
+        if (found || data.data[0]) {
+          setCurrentEnterprise(found || data.data[0]);
         }
       }
     } catch {
@@ -71,7 +68,6 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
     setCurrentEnterprise(ent);
     localStorage.setItem('current_enterprise_id', ent.enterprise_id);
     setShowEnterpriseDropdown(false);
-    // Reload page to refresh data with new enterprise context
     window.location.reload();
   };
 
@@ -81,7 +77,7 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
     try {
       const res = await fetch('/api/enterprises/join', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-session': token },
+        headers: { 'Content-Type': 'application/json', 'x-session': token || '' },
         body: JSON.stringify({ invite_code: joinCode.trim() }),
       });
       const data = await res.json();
@@ -89,7 +85,6 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
         setShowJoinDialog(false);
         setJoinCode('');
         await loadEnterprises();
-        // Switch to the newly joined enterprise
         const joined = data.data;
         if (joined?.id) {
           handleSwitchEnterprise({
@@ -115,7 +110,7 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
     try {
       const res = await fetch('/api/enterprises', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-session': token },
+        headers: { 'Content-Type': 'application/json', 'x-session': token || '' },
         body: JSON.stringify({ name: newEnterpriseName.trim() }),
       });
       const data = await res.json();
@@ -136,18 +131,23 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
     }
   };
 
+  const handleNavClick = (tab: string) => {
+    onTabChange(tab as SidebarProps['onTabChange'] extends (tab: infer T) => void ? T : never);
+    onMobileClose?.();
+  };
+
   const userEmail = user?.email ?? '';
   const userInitial = userEmail.charAt(0).toUpperCase() || 'U';
 
-  return (
-    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-[#1e293b] text-white flex flex-col">
-      <div className="px-6 py-5 border-b border-white/10">
+  const sidebarContent = (
+    <>
+      <div className="px-4 md:px-6 py-4 md:py-5 border-b border-white/10">
         <h1 className="text-lg font-bold tracking-tight">询盘话术知识库</h1>
         <p className="text-xs text-slate-400 mt-1">AI 驱动 · 专业高效</p>
       </div>
 
       {/* Enterprise selector */}
-      <div className="px-4 py-3 border-b border-white/10">
+      <div className="px-3 md:px-4 py-3 border-b border-white/10">
         <div className="relative">
           <button
             onClick={() => setShowEnterpriseDropdown(!showEnterpriseDropdown)}
@@ -218,12 +218,12 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 py-4">
+      <nav className="flex-1 py-3 md:py-4 overflow-y-auto">
         {navItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => onTabChange(item.id)}
-            className={`w-full flex items-center gap-3 px-6 py-3 text-sm transition-colors ${
+            onClick={() => handleNavClick(item.id)}
+            className={`w-full flex items-center gap-3 px-4 md:px-6 py-3 text-sm transition-colors ${
               activeTab === item.id
                 ? 'bg-cyan-600/20 text-cyan-400 border-r-2 border-cyan-400'
                 : 'text-slate-300 hover:bg-white/5 hover:text-white'
@@ -235,10 +235,10 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
         ))}
         {isAdmin && (
           <>
-            <div className="mx-6 my-2 border-t border-white/10" />
+            <div className="mx-4 md:mx-6 my-2 border-t border-white/10" />
             <button
-              onClick={() => onTabChange(adminNavItem.id)}
-              className={`w-full flex items-center gap-3 px-6 py-3 text-sm transition-colors ${
+              onClick={() => handleNavClick(adminNavItem.id)}
+              className={`w-full flex items-center gap-3 px-4 md:px-6 py-3 text-sm transition-colors ${
                 activeTab === adminNavItem.id
                   ? 'bg-cyan-600/20 text-cyan-400 border-r-2 border-cyan-400'
                   : 'text-slate-300 hover:bg-white/5 hover:text-white'
@@ -252,9 +252,9 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
       </nav>
 
       {/* User info and logout */}
-      <div className="px-4 py-3 border-t border-white/10">
+      <div className="px-3 md:px-4 py-3 border-t border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center text-sm font-bold">
+          <div className="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center text-sm font-bold shrink-0">
             {userInitial}
           </div>
           <div className="flex-1 min-w-0">
@@ -262,7 +262,7 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
           </div>
           <button
             onClick={signOut}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-slate-400 hover:text-white transition-colors shrink-0"
             title="退出登录"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -272,14 +272,47 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
         </div>
       </div>
 
-      <div className="px-6 py-3 border-t border-white/10">
+      <div className="px-4 md:px-6 py-2 md:py-3 border-t border-white/10">
         <p className="text-xs text-slate-500">v1.0.0</p>
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar: always visible */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 bg-[#1e293b] text-white flex-col z-30">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile overlay + drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={onMobileClose}
+          />
+          {/* Drawer */}
+          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-[#1e293b] text-white flex flex-col animate-in slide-in-from-left duration-200">
+            {/* Close button */}
+            <button
+              onClick={onMobileClose}
+              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
 
       {/* Join Enterprise Dialog */}
       {showJoinDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800 mb-4">加入企业</h3>
             <p className="text-sm text-slate-500 mb-3">输入企业邀请码，加入您的团队</p>
             <input
@@ -311,8 +344,8 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
 
       {/* Create Enterprise Dialog */}
       {showCreateDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800 mb-4">创建企业</h3>
             <p className="text-sm text-slate-500 mb-3">创建企业后将自动生成邀请码，您可以分享给团队成员</p>
             <input
@@ -341,6 +374,6 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
           </div>
         </div>
       )}
-    </aside>
+    </>
   );
 }

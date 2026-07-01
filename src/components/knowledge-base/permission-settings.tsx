@@ -365,7 +365,7 @@ export default function PermissionSettings() {
                         {CATEGORIES.map(category => (
                           <div key={category} className="mb-4 last:mb-0">
                             <h5 className="text-xs font-medium text-muted-foreground mb-1.5">{category}</h5>
-                            <div className="grid grid-cols-2 gap-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                               {ALL_PERMISSIONS.filter(p => p.category === category).map(perm => (
                                 <label
                                   key={perm.key}

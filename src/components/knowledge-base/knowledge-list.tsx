@@ -634,13 +634,14 @@ export function KnowledgeList() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">知识库管理</h2>
-          <p className="text-sm text-slate-500 mt-1">管理和检索询盘话术，共 {total} 条</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
+      <div className="mb-4 md:mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h2 className="text-xl md:text-2xl font-bold text-slate-800">知识库管理</h2>
+            <p className="text-sm text-slate-500 mt-1">管理和检索询盘话术，共 {total} 条</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button
             variant="outline"
             size="sm"
             onClick={() => { downloadTemplate(); }}
@@ -713,10 +714,11 @@ export function KnowledgeList() {
           )}
         </div>
       </div>
+      </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6 flex-wrap">
-        <div className="flex-1 min-w-[200px]">
+      <div className="flex gap-2 md:gap-3 mb-4 md:mb-6 flex-wrap">
+        <div className="flex-1 min-w-[150px] md:min-w-[200px]">
           <Input
             placeholder="搜索问题或答案..."
             value={search}
@@ -891,7 +893,7 @@ export function KnowledgeList() {
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>新增话术</DialogTitle>
           </DialogHeader>
@@ -950,7 +952,7 @@ export function KnowledgeList() {
 
       {/* Edit Dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>编辑话术</DialogTitle>
           </DialogHeader>
@@ -1667,7 +1669,7 @@ export function KnowledgeList() {
 
       {/* Versions Dialog */}
       <Dialog open={showVersions} onOpenChange={setShowVersions}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>版本历史</DialogTitle>
           </DialogHeader>
@@ -1709,7 +1711,7 @@ export function KnowledgeList() {
 
       {/* Import Dialog */}
       <Dialog open={showImport} onOpenChange={(open) => { setShowImport(open); if (!open) resetImportForm(); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>导入话术</DialogTitle>
           </DialogHeader>
@@ -1869,6 +1871,6 @@ export function KnowledgeList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
+      </div>
+    );
+  }

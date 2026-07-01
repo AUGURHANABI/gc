@@ -61,9 +61,9 @@ export function Statistics() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6">数据统计</h2>
-        <div className="grid grid-cols-4 gap-4">
+      <div className="max-w-6xl mx-auto px-2 md:px-0">
+        <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-4 md:mb-6">数据统计</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="bg-white rounded-lg p-6 animate-pulse">
               <div className="h-4 bg-slate-200 rounded w-1/2 mb-3" />
@@ -93,19 +93,19 @@ export function Statistics() {
   );
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">数据统计</h2>
+    <div className="max-w-6xl mx-auto px-2 md:px-0">
+      <div className="mb-4 md:mb-6">
+        <h2 className="text-xl md:text-2xl font-bold text-slate-800">数据统计</h2>
         <p className="text-sm text-slate-500 mt-1">知识库运营数据与话术效果分析</p>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
         {statCards.map((card) => (
           <Card key={card.label} className="bg-white">
-            <CardContent className="p-6">
-              <p className="text-sm text-slate-500">{card.label}</p>
-              <p className={`text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
+            <CardContent className="p-3 md:p-6">
+              <p className="text-xs md:text-sm text-slate-500">{card.label}</p>
+              <p className={`text-xl md:text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
             </CardContent>
           </Card>
         ))}
@@ -136,7 +136,7 @@ export function Statistics() {
       </div>
 
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Category Distribution */}
           <Card className="bg-white">
             <CardHeader>
@@ -253,7 +253,7 @@ export function Statistics() {
       )}
 
       {activeTab === 'effectiveness' && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Rating Distribution */}
           <Card className="bg-white">
             <CardHeader>
@@ -310,7 +310,7 @@ export function Statistics() {
                   </p>
                   <p className="text-sm text-slate-500 mt-2">平均效果评分</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-slate-50 rounded-lg">
                     <p className="text-2xl font-bold text-slate-700">
                       {effectiveness?.total_rated ?? 0}
