@@ -846,7 +846,39 @@ export function KnowledgeList() {
             <DialogTitle>话术详情</DialogTitle>
           </DialogHeader>
           {selectedEntry && (() => {
+            // Parse multi-answer patterns like "回答一：xxx 回答二：xxx"
+            const parseAnswers = (text: string): string[] => {
+              const patterns = [
+                /回答[一二三四五六七八九十\d]+[：:]\s*/g,
+                /答案[一二三四五六七八九十\d]+[：:]\s*/g,
+                /回复话术[一二三四五六七八九十\d]+[：:]\s*/g,
+                /答复[一二三四五六七八九十\d]+[：:]\s*/g,
+              ];
+              for (const pat of patterns) {
+                const matches = [...text.matchAll(pat)];
+                if (matches.length >= 2) {
+                  const parts: string[] = [];
+                  for (let i = 0; i < matches.length; i++) {
+                    const start = matches[i].index! + matches[i][0].length;
+                    const end = i + 1 < matches.length ? matches[i + 1].index! : text.length;
+                    parts.push(text.slice(start, end).trim());
+                  }
+                  return parts.filter(p => p.length > 0);
+                }
+              }
+              return [text];
+            };
+
             const sameQuestionEntries = entries.filter(e => e.question === selectedEntry.question);
+            // For each entry, parse its answer into sub-answers
+            const allAnswers: { entryId: string; entry: KnowledgeEntry; subIndex: number; content: string }[] = [];
+            for (const entry of sameQuestionEntries) {
+              const parts = parseAnswers(entry.answer);
+              parts.forEach((content, idx) => {
+                allAnswers.push({ entryId: entry.id, entry, subIndex: idx, content });
+              });
+            }
+            const isMultiple = allAnswers.length > 1;
             return (
             <div className="space-y-5">
               {/* Question */}
@@ -855,65 +887,65 @@ export function KnowledgeList() {
                 <p className="mt-1 text-slate-800 font-medium">{selectedEntry.question}</p>
               </div>
 
-              {/* Multiple Answers */}
-              {sameQuestionEntries.length > 1 ? (
-                <div className="space-y-3">
-                  <Label className="text-slate-500">
-                    回复话术（共 {sameQuestionEntries.length} 条）
-                  </Label>
-                  {sameQuestionEntries.map((entry, idx) => (
-                    <div
-                      key={entry.id}
-                      className={`rounded-lg border p-4 space-y-3 ${
-                        entry.id === selectedEntry.id
-                          ? 'border-cyan-300 bg-cyan-50/20'
-                          : 'border-slate-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-cyan-600">
-                          回复话术 {idx + 1}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400">使用 {entry.usage_count} 次</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs gap-1"
-                            onClick={() => handleCopyAnswer(entry)}
-                          >
-                            {copiedId === entry.id ? (
-                              <>
-                                <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                已复制
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                复制
-                              </>
-                            )}
-                          </Button>
-                        </div>
+              {/* Answers */}
+              <div className="space-y-3">
+                <Label className="text-slate-500">
+                  回复话术（共 {allAnswers.length} 条）
+                </Label>
+                {allAnswers.map((ans, idx) => (
+                  <div
+                    key={`${ans.entryId}-${ans.subIndex}`}
+                    className={`rounded-lg border p-4 space-y-3 ${
+                      isMultiple
+                        ? 'border-slate-200 bg-white'
+                        : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-cyan-600">
+                        回复话术 {idx + 1}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">使用 {ans.entry.usage_count} 次</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => handleCopyAnswer(ans.entry)}
+                        >
+                          {copiedId === ans.entry.id ? (
+                            <>
+                              <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                              已复制
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                              复制
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      <div className="isolate">
-                        <div className="p-3 bg-slate-50 rounded-lg text-slate-700 whitespace-pre-wrap text-sm leading-relaxed overflow-hidden" onCopy={() => handleTextCopy(entry)}>
-                          {entry.answer}
-                        </div>
+                    </div>
+                    <div className="isolate">
+                      <div className="p-3 bg-slate-50 rounded-lg text-slate-700 whitespace-pre-wrap text-sm leading-relaxed overflow-hidden" onCopy={() => handleTextCopy(ans.entry)}>
+                        {ans.content}
                       </div>
+                    </div>
+                    {isMultiple && (
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((star) => (
                             <span
                               key={star}
                               className="text-sm"
-                              style={{ color: star <= entry.effectiveness_score ? '#f59e0b' : '#cbd5e1' }}
+                              style={{ color: star <= ans.entry.effectiveness_score ? '#f59e0b' : '#cbd5e1' }}
                             >
                               ★
                             </span>
                           ))}
                           <span className="text-xs text-slate-400 ml-1">
-                            {entry.effectiveness_score > 0 ? `${entry.effectiveness_score}/5` : '未评分'}
+                            {ans.entry.effectiveness_score > 0 ? `${ans.entry.effectiveness_score}/5` : '未评分'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -923,7 +955,7 @@ export function KnowledgeList() {
                             className="h-7 text-xs text-slate-500 hover:text-cyan-600"
                             onClick={() => {
                               setShowDetail(false);
-                              setTimeout(() => openEdit(entry), 150);
+                              setTimeout(() => openEdit(ans.entry), 150);
                             }}
                           >
                             编辑
@@ -932,46 +964,16 @@ export function KnowledgeList() {
                             variant="ghost"
                             size="sm"
                             className="h-7 text-xs text-red-400 hover:text-red-600"
-                            onClick={() => handleDelete(entry.id)}
+                            onClick={() => handleDelete(ans.entry.id)}
                           >
                             删除
                           </Button>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                /* Single answer */
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-slate-500">回复话术</Label>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1"
-                      onClick={() => handleCopyAnswer(selectedEntry)}
-                    >
-                      {copiedId === selectedEntry.id ? (
-                        <>
-                          <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                          已复制
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                          复制话术
-                        </>
-                      )}
-                    </Button>
+                    )}
                   </div>
-                  <div className="mt-1 isolate">
-                    <div className="p-3 bg-slate-50 rounded-lg text-slate-700 whitespace-pre-wrap text-sm leading-relaxed max-h-[300px] overflow-y-auto overflow-hidden" onCopy={() => handleTextCopy(selectedEntry)}>
-                      {selectedEntry.answer}
-                    </div>
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
 
               {/* Category & Status */}
               <div className="flex items-center gap-4">
