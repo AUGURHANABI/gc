@@ -90,8 +90,14 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
         setJoinCode('');
         await loadEnterprises();
         // Switch to the newly joined enterprise
-        if (data.data?.enterprise) {
-          handleSwitchEnterprise(data.data.enterprise);
+        const joined = data.data;
+        if (joined?.id) {
+          handleSwitchEnterprise({
+            enterprise_id: joined.id,
+            enterprise_name: joined.name,
+            invite_code: joined.invite_code,
+            role: joined.role || 'member',
+          });
         }
       } else {
         alert(data.error || '加入企业失败');
@@ -279,9 +285,9 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
             <input
               type="text"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="请输入邀请码"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500 mb-4"
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="请输入邀请码（不区分大小写）"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-800 uppercase font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-cyan-500 mb-4"
               onKeyDown={(e) => e.key === 'Enter' && handleJoinEnterprise()}
             />
             <div className="flex gap-3 justify-end">

@@ -17,20 +17,25 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { invite_code } = body;
 
-  if (!invite_code || !invite_code.trim()) {
+  const trimmedCode = (invite_code || '').trim().toUpperCase();
+  if (!trimmedCode) {
     return NextResponse.json({ error: '请输入邀请码' }, { status: 400 });
   }
 
   const serviceClient = getSupabaseClientOrThrow();
 
-  // Find enterprise by invite code
+  // Find enterprise by invite code (case-insensitive)
   const { data: enterprise, error: findError } = await serviceClient
     .from('enterprises')
     .select('id, name, invite_code')
-    .eq('invite_code', invite_code.trim().toUpperCase())
+    .ilike('invite_code', trimmedCode)
     .maybeSingle();
 
-  if (findError || !enterprise) {
+  if (findError) {
+    console.error('[join] Error finding enterprise:', findError.message);
+    return NextResponse.json({ error: '查询企业失败，请稍后重试' }, { status: 500 });
+  }
+  if (!enterprise) {
     return NextResponse.json({ error: '邀请码无效，请检查后重试' }, { status: 404 });
   }
 
