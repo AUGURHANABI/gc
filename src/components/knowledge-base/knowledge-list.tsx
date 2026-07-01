@@ -210,29 +210,28 @@ export function KnowledgeList() {
   };
 
   // 复制话术并记录使用次数（30秒防重复）
-  const handleCopyAnswer = async (entry: KnowledgeEntry, e?: React.MouseEvent) => {
+  const handleCopyAnswer = async (entry: KnowledgeEntry, answerIndex?: number, answerText?: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      await navigator.clipboard.writeText(entry.answer);
-      setCopiedId(entry.id);
+      const textToCopy = answerText || entry.answer;
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedId(answerIndex !== undefined ? `${entry.id}-${answerIndex}` : entry.id);
       setTimeout(() => setCopiedId(null), 2000);
 
-      // 30秒内同一条目不重复计数
+      // 30秒内同一条目+同一回答不重复计数
       const now = Date.now();
-      const lastCopy = recentCopyRef.current.get(entry.id);
+      const dedupeKey = answerIndex !== undefined ? `${entry.id}-a${answerIndex}` : entry.id;
+      const lastCopy = recentCopyRef.current.get(dedupeKey);
       if (!lastCopy || now - lastCopy >= 30_000) {
-        recentCopyRef.current.set(entry.id, now);
-        recordUsage(entry.id).then((res) => {
+        recentCopyRef.current.set(dedupeKey, now);
+        recordUsage(entry.id, answerIndex).then((res) => {
           if (res.data.counted) {
-            // 更新本地 usage_count
-            setEntries((prev) =>
-              prev.map((e) =>
-                e.id === entry.id ? { ...e, usage_count: res.data.usage_count } : e
-              )
-            );
+            const updateFn = (e: KnowledgeEntry) =>
+              e.id === entry.id ? { ...e, usage_count: res.data.usage_count, answer_usage_counts: res.data.answer_usage_counts } : e;
+            setEntries((prev) => prev.map(updateFn));
             if (selectedEntry?.id === entry.id) {
               setSelectedEntry((prev) =>
-                prev ? { ...prev, usage_count: res.data.usage_count } : prev
+                prev ? { ...prev, usage_count: res.data.usage_count, answer_usage_counts: res.data.answer_usage_counts } : prev
               );
             }
           }
@@ -251,14 +250,12 @@ export function KnowledgeList() {
       recentCopyRef.current.set(entry.id, now);
       recordUsage(entry.id).then((res) => {
         if (res.data.counted) {
-          setEntries((prev) =>
-            prev.map((e) =>
-              e.id === entry.id ? { ...e, usage_count: res.data.usage_count } : e
-            )
-          );
+          const updateFn = (e: KnowledgeEntry) =>
+            e.id === entry.id ? { ...e, usage_count: res.data.usage_count, answer_usage_counts: res.data.answer_usage_counts } : e;
+          setEntries((prev) => prev.map(updateFn));
           if (selectedEntry?.id === entry.id) {
             setSelectedEntry((prev) =>
-              prev ? { ...prev, usage_count: res.data.usage_count } : prev
+              prev ? { ...prev, usage_count: res.data.usage_count, answer_usage_counts: res.data.answer_usage_counts } : prev
             );
           }
         }
@@ -906,14 +903,14 @@ export function KnowledgeList() {
                         回复话术 {idx + 1}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-400">使用 {ans.entry.usage_count} 次</span>
+                        <span className="text-xs text-slate-400">使用 {ans.entry.answer_usage_counts?.[String(idx)] ?? 0} 次</span>
                         <Button
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs gap-1"
-                          onClick={() => handleCopyAnswer(ans.entry)}
+                          onClick={(e) => handleCopyAnswer(ans.entry, idx, ans.content, e)}
                         >
-                          {copiedId === ans.entry.id ? (
+                          {copiedId === `${ans.entry.id}-${idx}` ? (
                             <>
                               <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                               已复制

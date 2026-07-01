@@ -248,6 +248,7 @@ export interface KnowledgeEntry {
   category_id: string | null;
   is_active: boolean;
   usage_count: number;
+  answer_usage_counts: Record<string, number>;
   effectiveness_score: number;
   current_version: number;
   created_at: string;
@@ -368,8 +369,14 @@ export async function mergeCommentToAnswer(entryId: string, commentId: string) {
   return res.json();
 }
 
-export async function recordUsage(entryId: string): Promise<{ data: { id: string; usage_count: number; counted: boolean } }> {
-  const res = await authFetch(`${API_BASE}/knowledge/${entryId}/use`, { method: 'PUT' });
+export async function recordUsage(entryId: string, answerIndex?: number): Promise<{ data: { id: string; usage_count: number; answer_usage_counts: Record<string, number>; counted: boolean } }> {
+  const body: Record<string, unknown> = {};
+  if (answerIndex !== undefined) body.answerIndex = answerIndex;
+  const res = await authFetch(`${API_BASE}/knowledge/${entryId}/use`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || '记录使用失败');
