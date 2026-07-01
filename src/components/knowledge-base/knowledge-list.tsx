@@ -106,6 +106,8 @@ export function KnowledgeList() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [mergingCommentId, setMergingCommentId] = useState<string | null>(null);
   const [hoverScore, setHoverScore] = useState(0);
+  const [detailCategory, setDetailCategory] = useState<string | null>(null);
+  const [detailTags, setDetailTags] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -288,12 +290,54 @@ export function KnowledgeList() {
     setCommentAuthor('');
     setCommentContent('');
     setHoverScore(0);
+    setDetailCategory(entry.category_id ?? null);
+    setDetailTags(entry.tags?.map(t => t.id) ?? []);
     loadComments(entry.id);
     // Find sibling entries (same question)
     const q = question || entry.question;
     const siblings = entries.filter(e => e.question === q);
     setSiblingEntries(siblings);
     setShowDetail(true);
+  };
+
+  const handleDetailCategoryChange = async (categoryId: string | null) => {
+    if (!selectedEntry) return;
+    setDetailCategory(categoryId);
+    try {
+      await updateKnowledge(selectedEntry.id, {
+        category_id: categoryId ?? null,
+      });
+      // Update local entries
+      setEntries(prev => prev.map(e =>
+        e.id === selectedEntry.id ? { ...e, category_id: categoryId ?? null } : e
+      ));
+      setSelectedEntry(prev => prev ? { ...prev, category_id: categoryId ?? null } : prev);
+    } catch {
+      // Revert on error
+      setDetailCategory(selectedEntry.category_id ?? null);
+    }
+  };
+
+  const handleDetailTagToggle = async (tagId: string) => {
+    if (!selectedEntry) return;
+    const newTags = detailTags.includes(tagId)
+      ? detailTags.filter(id => id !== tagId)
+      : [...detailTags, tagId];
+    setDetailTags(newTags);
+    try {
+      await updateKnowledge(selectedEntry.id, {
+        tag_ids: newTags,
+      });
+      // Update local entries - refresh tags
+      const updatedTags = tags.filter(t => newTags.includes(t.id));
+      setEntries(prev => prev.map(e =>
+        e.id === selectedEntry.id ? { ...e, tags: updatedTags } : e
+      ));
+      setSelectedEntry(prev => prev ? { ...prev, tags: updatedTags } : prev);
+    } catch {
+      // Revert on error
+      setDetailTags(selectedEntry.tags?.map(t => t.id) ?? []);
+    }
   };
 
   const openVersions = async (entry: KnowledgeEntry) => {
@@ -974,15 +1018,28 @@ export function KnowledgeList() {
 
               {/* Category & Status */}
               <div className="flex items-center gap-4">
-                <div>
+                <div className="flex-1">
                   <Label className="text-slate-500">分类</Label>
-                  <p className="mt-1">
-                    {selectedEntry.categories ? (
-                      <Badge variant="outline">{selectedEntry.categories.name}</Badge>
-                    ) : (
-                      <span className="text-slate-400">未分类</span>
-                    )}
-                  </p>
+                  <Select
+                    value={detailCategory || '__none__'}
+                    onValueChange={(v) => {
+                      const newCat = v === '__none__' ? null : v;
+                      setDetailCategory(newCat);
+                      handleDetailCategoryChange(newCat);
+                    }}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="选择分类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">无分类</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-slate-500">状态</Label>
@@ -997,18 +1054,29 @@ export function KnowledgeList() {
               {/* Tags */}
               <div>
                 <Label className="text-slate-500">标签</Label>
-                <div className="flex gap-2 mt-1 flex-wrap">
-                  {selectedEntry.tags?.map((tag) => (
-                    <Badge
-                      key={tag.id}
-                      className="text-white"
-                      style={{ backgroundColor: tag.color }}
-                    >
-                      {tag.name}
-                    </Badge>
-                  ))}
-                  {(!selectedEntry.tags || selectedEntry.tags.length === 0) && (
-                    <span className="text-slate-400">无标签</span>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {tags.map((tag) => {
+                    const isSelected = detailTags.includes(tag.id);
+                    return (
+                      <Badge
+                        key={tag.id}
+                        className={`cursor-pointer select-none transition-opacity ${
+                          isSelected ? 'opacity-100' : 'opacity-40'
+                        }`}
+                        style={{ backgroundColor: tag.color, color: '#fff' }}
+                        onClick={() => {
+                          const newTags = isSelected
+                            ? detailTags.filter((t) => t !== tag.id)
+                            : [...detailTags, tag.id];
+                          handleDetailTagToggle(tag.id);
+                        }}
+                      >
+                        {tag.name}
+                      </Badge>
+                    );
+                  })}
+                  {tags.length === 0 && (
+                    <span className="text-slate-400 text-sm">暂无标签可选用</span>
                   )}
                 </div>
               </div>
