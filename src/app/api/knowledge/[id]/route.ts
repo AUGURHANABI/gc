@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
-import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse } from '@/lib/auth-helpers';
 
 export async function GET(
   req: NextRequest,
@@ -41,6 +41,16 @@ export async function PUT(
   const client = getSupabaseClientOrThrow();
   const body = await req.json();
   const { question, answer, category_id, tag_ids, is_active, change_note, effectiveness_score } = body;
+
+  // Check permission for content edits (question/answer/is_active changes)
+  const enterpriseId = await getEnterpriseId(req, user.id);
+  if (enterpriseId) {
+    const isContentEdit = question !== undefined || answer !== undefined || is_active !== undefined;
+    if (isContentEdit) {
+      const canEdit = await checkPermission(user.id, enterpriseId, 'entry:edit');
+      if (!canEdit) return forbiddenResponse('entry:edit');
+    }
+  }
 
   // Get current entry to check version
   const { data: current, error: fetchError } = await client
@@ -121,6 +131,13 @@ export async function DELETE(
 ) {
   const user = await getAuthUser(req);
   if (!user) return unauthorizedResponse();
+
+  // Check permission: entry:delete
+  const enterpriseId = await getEnterpriseId(req, user.id);
+  if (enterpriseId) {
+    const canDelete = await checkPermission(user.id, enterpriseId, 'entry:delete');
+    if (!canDelete) return forbiddenResponse('entry:delete');
+  }
 
   const { id } = await params;
   const client = getSupabaseClientOrThrow();

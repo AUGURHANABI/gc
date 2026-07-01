@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { usePermissions } from '@/lib/permission-context';
 import {
   fetchTags,
   createTag,
@@ -21,12 +22,15 @@ const PRESET_COLORS = [
 ];
 
 export function TagManager() {
+  const { hasPermission } = usePermissions();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
   const [formColor, setFormColor] = useState('#0891b2');
+
+  const canManage = hasPermission('tag:manage');
 
   const loadTags = useCallback(async () => {
     setLoading(true);
@@ -90,6 +94,7 @@ export function TagManager() {
           <h2 className="text-2xl font-bold text-slate-800">标签管理</h2>
           <p className="text-sm text-slate-500 mt-1">管理话术标签，实现精细化分类</p>
         </div>
+        {canManage && (
         <Button
           onClick={() => {
             resetForm();
@@ -99,6 +104,7 @@ export function TagManager() {
         >
           + 新增标签
         </Button>
+        )}
       </div>
 
       {loading ? (
@@ -110,7 +116,9 @@ export function TagManager() {
       ) : tags.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="text-lg">暂无标签</p>
+          {canManage && (
           <p className="text-sm mt-2">点击"新增标签"创建第一个标签</p>
+          )}
         </div>
       ) : (
         <div className="flex flex-wrap gap-3">
@@ -122,6 +130,7 @@ export function TagManager() {
                   style={{ backgroundColor: tag.color }}
                 />
                 <span className="text-sm font-medium text-slate-700">{tag.name}</span>
+                {canManage && (
                 <div className="flex gap-1 ml-2">
                   <Button
                     variant="ghost"
@@ -140,6 +149,7 @@ export function TagManager() {
                     删除
                   </Button>
                 </div>
+                )}
               </CardContent>
             </Card>
           ))}

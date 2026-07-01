@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
-import { getAuthUser, getEnterpriseId, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse } from '@/lib/auth-helpers';
 
 export async function GET(
   req: NextRequest,
@@ -29,6 +29,13 @@ export async function PUT(
   const user = await getAuthUser(req);
   if (!user) return unauthorizedResponse();
 
+  // Check permission: category:manage
+  const enterpriseId = await getEnterpriseId(req, user.id);
+  if (enterpriseId) {
+    const canManage = await checkPermission(user.id, enterpriseId, 'category:manage');
+    if (!canManage) return forbiddenResponse('category:manage');
+  }
+
   const { id } = await params;
   const client = getSupabaseClientOrThrow();
   const body = await req.json();
@@ -52,6 +59,13 @@ export async function DELETE(
 ) {
   const user = await getAuthUser(req);
   if (!user) return unauthorizedResponse();
+
+  // Check permission: category:manage
+  const enterpriseId = await getEnterpriseId(req, user.id);
+  if (enterpriseId) {
+    const canManage = await checkPermission(user.id, enterpriseId, 'category:manage');
+    if (!canManage) return forbiddenResponse('category:manage');
+  }
 
   const { id } = await params;
   const client = getSupabaseClientOrThrow();

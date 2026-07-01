@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
-import { getAuthUser, getEnterpriseId, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
   if (!enterpriseId) {
     return NextResponse.json({ error: '请先加入企业' }, { status: 403 });
   }
+
+  // Check permission: entry:create
+  const canCreate = await checkPermission(user.id, enterpriseId, 'entry:create');
+  if (!canCreate) return forbiddenResponse('entry:create');
+
   const client = getSupabaseClientOrThrow();
   const body = await req.json();
   const { question, answer, category_id, tag_ids } = body;
@@ -144,6 +149,10 @@ export async function DELETE(req: NextRequest) {
   if (!enterpriseId) {
     return NextResponse.json({ error: '请先选择企业' }, { status: 400 });
   }
+
+  // Check permission: entry:delete
+  const canDelete = await checkPermission(user.id, enterpriseId, 'entry:delete');
+  if (!canDelete) return forbiddenResponse('entry:delete');
 
   const client = getSupabaseClientOrThrow();
   const body = await req.json();

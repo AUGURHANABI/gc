@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
 import { User } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
 /**
  * Verify session token from x-session header and return the user.
@@ -22,19 +23,16 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
 
 /**
  * Get the enterprise_id for the current user from the request.
- * First checks query param, then looks up user's enterprise membership.
+ * First checks header, then query param, then request body, then looks up membership.
  */
 export async function getEnterpriseId(req: NextRequest, userId: string): Promise<string | null> {
-  // Check header first (x-enterprise-id)
   const headerEnterpriseId = req.headers.get('x-enterprise-id');
   if (headerEnterpriseId) return headerEnterpriseId;
 
-  // Check query param next (for GET requests)
   const url = new URL(req.url);
   const enterpriseId = url.searchParams.get('enterprise_id');
   if (enterpriseId) return enterpriseId;
 
-  // Check request body (for POST/PUT)
   try {
     const cloned = req.clone();
     const body = await cloned.json().catch(() => ({}));
@@ -43,7 +41,6 @@ export async function getEnterpriseId(req: NextRequest, userId: string): Promise
     // Ignore parse errors
   }
 
-  // Look up user's current enterprise
   const client = getSupabaseClientOrThrow();
   const { data: membership } = await client
     .from('enterprise_members')
@@ -56,6 +53,63 @@ export async function getEnterpriseId(req: NextRequest, userId: string): Promise
 }
 
 /**
+ * Get the user's role in a specific enterprise.
+ * Returns null if user is not a member of the enterprise.
+ */
+export async function getUserRole(userId: string, enterpriseId: string): Promise<string | null> {
+  const client = getSupabaseClientOrThrow();
+  const { data: membership } = await client
+    .from('enterprise_members')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('enterprise_id', enterpriseId)
+    .maybeSingle();
+
+  return membership?.role || null;
+}
+
+/**
+ * Check if a user has a specific permission in their enterprise.
+ * - Owner/Admin always has all permissions
+ * - Member's permissions are checked against enterprise_role_permissions table
+ */
+export async function checkPermission(
+  userId: string,
+  enterpriseId: string,
+  permission: string
+): Promise<boolean> {
+  const role = await getUserRole(userId, enterpriseId);
+
+  // Owner and admin always have all permissions
+  if (role === 'owner' || role === 'admin') return true;
+
+  // Not a member
+  if (!role) return false;
+
+  // Member: check role permissions
+  const client = getSupabaseClientOrThrow();
+  const { data: rolePerms } = await client
+    .from('enterprise_role_permissions')
+    .select('permissions')
+    .eq('enterprise_id', enterpriseId)
+    .eq('role', 'member')
+    .maybeSingle();
+
+  if (!rolePerms?.permissions) return false;
+
+  const permissions = rolePerms.permissions as string[];
+  return permissions.includes(permission);
+}
+
+/**
+ * Check if user is an admin (owner or admin role) for the enterprise.
+ */
+export async function isAdmin(userId: string, enterpriseId: string): Promise<boolean> {
+  const role = await getUserRole(userId, enterpriseId);
+  return role === 'owner' || role === 'admin';
+}
+
+/**
  * Standard unauthorized response
  */
 export function unauthorizedResponse() {
@@ -63,4 +117,17 @@ export function unauthorizedResponse() {
     status: 401,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+/**
+ * Permission denied response
+ */
+export function forbiddenResponse(permission?: string) {
+  return new Response(
+    JSON.stringify({ error: permission ? `没有 ${permission} 权限` : '没有操作权限' }),
+    {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
 }

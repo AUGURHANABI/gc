@@ -3,18 +3,21 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { usePermissions } from '@/lib/permission-context';
 import { Sidebar } from '@/components/knowledge-base/sidebar';
 import { KnowledgeList } from '@/components/knowledge-base/knowledge-list';
 import { AIQA } from '@/components/knowledge-base/ai-qa';
 import { CategoryManager } from '@/components/knowledge-base/category-manager';
 import { TagManager } from '@/components/knowledge-base/tag-manager';
 import { Statistics } from '@/components/knowledge-base/statistics';
+import PermissionSettings from '@/components/knowledge-base/permission-settings';
 
-type ActiveTab = 'knowledge' | 'qa' | 'categories' | 'tags' | 'statistics';
+type ActiveTab = 'knowledge' | 'qa' | 'categories' | 'tags' | 'statistics' | 'permissions';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('knowledge');
   const { user, isLoading } = useAuth();
+  const { permissions } = usePermissions();
   const router = useRouter();
 
   useEffect(() => {
@@ -35,15 +38,18 @@ export default function Home() {
     return null;
   }
 
+  const isAdmin = permissions?.isAdmin ?? false;
+
   return (
     <div className="flex min-h-screen">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
       <main className="flex-1 ml-64 p-6">
         {activeTab === 'knowledge' && <KnowledgeList />}
         {activeTab === 'qa' && <AIQA />}
         {activeTab === 'categories' && <CategoryManager />}
         {activeTab === 'tags' && <TagManager />}
         {activeTab === 'statistics' && <Statistics />}
+        {activeTab === 'permissions' && <PermissionSettings />}
       </main>
     </div>
   );

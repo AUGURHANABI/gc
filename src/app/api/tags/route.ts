@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
-import { getAuthUser, getEnterpriseId, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
   if (!enterpriseId) {
     return NextResponse.json({ error: '请先加入企业' }, { status: 403 });
   }
+
+  // Check permission: tag:manage
+  const canManage = await checkPermission(user.id, enterpriseId, 'tag:manage');
+  if (!canManage) return forbiddenResponse('tag:manage');
+
   const client = getSupabaseClientOrThrow();
   const body = await req.json();
   const { name, color } = body;

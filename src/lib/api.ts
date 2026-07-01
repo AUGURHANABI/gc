@@ -398,3 +398,70 @@ export async function downloadTemplate() {
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
 }
+
+// ===== 权限管理 =====
+
+export interface PermissionDefinition {
+  key: string;
+  label: string;
+  category: string;
+}
+
+export interface PermissionsData {
+  definitions: PermissionDefinition[];
+  permissionsByRole: Record<string, string[]>;
+  myPermissions: string[];
+  myRole: string | null;
+  isAdmin: boolean;
+}
+
+export async function fetchPermissions(): Promise<{ data: PermissionsData }> {
+  const res = await authFetch(`${API_BASE}/permissions`);
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '获取权限失败');
+  }
+  return res.json();
+}
+
+export async function updateRolePermissions(role: string, permissions: string[]) {
+  const res = await authFetch(`${API_BASE}/permissions`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role, permissions }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '更新权限失败');
+  }
+  return res.json();
+}
+
+export interface EnterpriseMember {
+  id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+}
+
+export async function fetchEnterpriseMembers(): Promise<{ data: EnterpriseMember[]; currentUserId: string }> {
+  const res = await authFetch(`${API_BASE}/permissions/members`);
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '获取成员列表失败');
+  }
+  return res.json();
+}
+
+export async function updateMemberRole(memberId: string, role: string) {
+  const res = await authFetch(`${API_BASE}/permissions/members`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberId, role }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || '更新角色失败');
+  }
+  return res.json();
+}

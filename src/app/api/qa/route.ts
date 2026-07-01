@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
-import { getAuthUser, getEnterpriseId, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser(req);
@@ -12,6 +12,12 @@ export async function POST(req: NextRequest) {
 
   if (!question) {
     return NextResponse.json({ error: '问题不能为空' }, { status: 400 });
+  }
+
+  // Check permission: qa:ask
+  if (enterpriseId) {
+    const canAsk = await checkPermission(user.id, enterpriseId, 'qa:ask');
+    if (!canAsk) return forbiddenResponse('qa:ask');
   }
 
   // Reuse a single client for all operations (no token = service role)

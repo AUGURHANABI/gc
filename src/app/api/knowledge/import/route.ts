@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
-import { getAuthUser, getEnterpriseId, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse } from '@/lib/auth-helpers';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 
@@ -238,6 +238,10 @@ export async function POST(request: NextRequest) {
     if (!enterpriseId) {
       return NextResponse.json({ error: '请先加入企业' }, { status: 403 });
     }
+
+    // Check permission: entry:import
+    const canImport = await checkPermission(user.id, enterpriseId, 'entry:import');
+    if (!canImport) return forbiddenResponse('entry:import');
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;

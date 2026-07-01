@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { usePermissions } from '@/lib/permission-context';
 import {
   fetchCategories,
   createCategory,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/api';
 
 export function CategoryManager() {
+  const { hasPermission } = usePermissions();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -96,6 +98,7 @@ export function CategoryManager() {
           <h2 className="text-2xl font-bold text-slate-800">分类管理</h2>
           <p className="text-sm text-slate-500 mt-1">管理询盘话术的分类，便于快速查找</p>
         </div>
+        {hasPermission('category:manage') && (
         <Button
           onClick={() => {
             resetForm();
@@ -105,6 +108,7 @@ export function CategoryManager() {
         >
           + 新增分类
         </Button>
+        )}
       </div>
 
       {loading ? (
@@ -118,7 +122,9 @@ export function CategoryManager() {
       ) : categories.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="text-lg">暂无分类</p>
+          {hasPermission('category:manage') && (
           <p className="text-sm mt-2">点击"新增分类"创建第一个分类</p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -134,6 +140,7 @@ export function CategoryManager() {
                     <p className="text-sm text-slate-500 mt-1">{cat.description}</p>
                   )}
                 </div>
+                {hasPermission('category:manage') && (
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={() => openEdit(cat)}>
                     编辑
@@ -147,6 +154,7 @@ export function CategoryManager() {
                     删除
                   </Button>
                 </div>
+                )}
               </CardContent>
             </Card>
           ))}

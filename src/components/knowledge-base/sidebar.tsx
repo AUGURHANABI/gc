@@ -12,7 +12,8 @@ interface Enterprise {
 
 interface SidebarProps {
   activeTab: string;
-  onTabChange: (tab: 'knowledge' | 'qa' | 'categories' | 'tags' | 'statistics') => void;
+  onTabChange: (tab: 'knowledge' | 'qa' | 'categories' | 'tags' | 'statistics' | 'permissions') => void;
+  isAdmin?: boolean;
 }
 
 const navItems = [
@@ -23,7 +24,9 @@ const navItems = [
   { id: 'statistics' as const, label: '数据统计', icon: '📊' },
 ];
 
-export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+const adminNavItem = { id: 'permissions' as const, label: '权限设置', icon: '⚙️' };
+
+export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
   const { user, session, signOut } = useAuth();
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [currentEnterprise, setCurrentEnterprise] = useState<Enterprise | null>(null);
@@ -203,6 +206,22 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             <span>{item.label}</span>
           </button>
         ))}
+        {isAdmin && (
+          <>
+            <div className="mx-6 my-2 border-t border-white/10" />
+            <button
+              onClick={() => onTabChange(adminNavItem.id)}
+              className={`w-full flex items-center gap-3 px-6 py-3 text-sm transition-colors ${
+                activeTab === adminNavItem.id
+                  ? 'bg-cyan-600/20 text-cyan-400 border-r-2 border-cyan-400'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <span className="text-base">{adminNavItem.icon}</span>
+              <span>{adminNavItem.label}</span>
+            </button>
+          </>
+        )}
       </nav>
 
       {/* User info and logout */}

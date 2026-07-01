@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { rateQA, type QARecord } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { usePermissions } from '@/lib/permission-context';
 
 interface Message {
   id: string;
@@ -19,6 +20,8 @@ interface Message {
 
 export function AIQA() {
   const { session } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canAsk = hasPermission('qa:ask');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -243,14 +246,14 @@ export function AIQA() {
               handleSubmit();
             }
           }}
-          placeholder="输入询盘问题，例如：客户询问交期怎么回复？"
+          placeholder={canAsk ? "输入询盘问题，例如：客户询问交期怎么回复？" : "您没有AI问答权限，请联系管理员开通"}
           className="bg-white flex-1"
           rows={2}
-          disabled={isStreaming}
+          disabled={isStreaming || !canAsk}
         />
         <Button
           onClick={handleSubmit}
-          disabled={isStreaming || !input.trim()}
+          disabled={isStreaming || !input.trim() || !canAsk}
           className="bg-cyan-600 hover:bg-cyan-700 self-end"
         >
           {isStreaming ? '生成中...' : '发送'}

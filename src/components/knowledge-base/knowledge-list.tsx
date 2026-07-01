@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useRef } from 'react';
+import { usePermissions } from '@/lib/permission-context';
 import {
   fetchKnowledge,
   fetchCategories,
@@ -38,6 +39,7 @@ import {
 } from '@/lib/api';
 
 export function KnowledgeList() {
+  const { hasPermission } = usePermissions();
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [expandedQuestion, setExpandedQuestion] = useState<string>('');
 
@@ -649,6 +651,7 @@ export function KnowledgeList() {
             </svg>
             下载模板
           </Button>
+          {hasPermission('entry:import') && (
           <Button
             variant="outline"
             onClick={() => {
@@ -662,7 +665,9 @@ export function KnowledgeList() {
             </svg>
             导入话术
           </Button>
-          {batchMode ? (
+          )}
+          {hasPermission('entry:delete') && (
+          batchMode ? (
             <>
               <Button
                 variant="outline"
@@ -694,7 +699,8 @@ export function KnowledgeList() {
             >
               批量管理
             </Button>
-          )}
+          ))}
+          {hasPermission('entry:create') && (
           <Button
             onClick={() => {
               resetForm();
@@ -704,6 +710,7 @@ export function KnowledgeList() {
           >
             + 新增话术
           </Button>
+          )}
         </div>
       </div>
 
@@ -1158,6 +1165,7 @@ export function KnowledgeList() {
                               </>
                             ) : (
                               <>
+                                {hasPermission('entry:edit') && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1166,6 +1174,8 @@ export function KnowledgeList() {
                                 >
                                   编辑
                                 </Button>
+                                )}
+                                {hasPermission('entry:delete') && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1174,6 +1184,7 @@ export function KnowledgeList() {
                                 >
                                   删除
                                 </Button>
+                                )}
                               </>
                             )}
                           </div>
@@ -1220,6 +1231,7 @@ export function KnowledgeList() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {hasPermission('entry:edit') && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1231,6 +1243,8 @@ export function KnowledgeList() {
                           >
                             编辑
                           </Button>
+                          )}
+                          {hasPermission('entry:delete') && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1239,6 +1253,7 @@ export function KnowledgeList() {
                           >
                             删除
                           </Button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1608,7 +1623,7 @@ export function KnowledgeList() {
                             </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            {!comment.is_merged && (
+                            {!comment.is_merged && hasPermission('comment:merge') && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1627,6 +1642,7 @@ export function KnowledgeList() {
                                 )}
                               </Button>
                             )}
+                            {hasPermission('comment:delete') && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1635,6 +1651,7 @@ export function KnowledgeList() {
                             >
                               删除
                             </Button>
+                            )}
                           </div>
                         </div>
                       </div>
