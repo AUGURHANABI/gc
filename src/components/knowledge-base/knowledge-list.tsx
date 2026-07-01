@@ -109,7 +109,7 @@ export function KnowledgeList() {
   const [commentAnonymous, setCommentAnonymous] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [mergingCommentId, setMergingCommentId] = useState<string | null>(null);
-  const [hoverScore, setHoverScore] = useState(0);
+  const [hoverScore, setHoverScore] = useState<string | null>(null); // entryId-based hover
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [detailTags, setDetailTags] = useState<string[]>([]);
   const [showCategoryPopover, setShowCategoryPopover] = useState(false);
@@ -314,7 +314,7 @@ export function KnowledgeList() {
     setEditReplyContent('');
     setShowAddReply(false);
     setNewReplyContent('');
-    setHoverScore(0);
+    setHoverScore(null);
     setDetailCategory(entry.category_id ?? null);
     setDetailTags(entry.tags?.map(t => t.id) ?? []);
     loadComments(entry.id);
@@ -519,11 +519,19 @@ export function KnowledgeList() {
     }
   };
 
-  const handleRate = async (score: number) => {
-    if (!selectedEntry) return;
+  const handleRate = async (entryId: string, score: number) => {
     try {
-      await rateEntry(selectedEntry.id, score);
-      setSelectedEntry({ ...selectedEntry, effectiveness_score: score });
+      await rateEntry(entryId, score);
+      // Update the specific entry in the entries list
+      setEntries(prev => prev.map(e =>
+        e.id === entryId ? { ...e, effectiveness_score: score } : e
+      ));
+      // Update selectedEntry if it matches
+      setSelectedEntry(prev => prev?.id === entryId ? { ...prev, effectiveness_score: score } : prev);
+      // Also update siblingEntries
+      setSiblingEntries(prev => prev.map(e =>
+        e.id === entryId ? { ...e, effectiveness_score: score } : e
+      ));
       loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : '评分失败');
@@ -1218,18 +1226,27 @@ export function KnowledgeList() {
                         </div>
                       </div>
                     )}
-                    {!managingReplies && isMultiple && (
+                    {!managingReplies && (
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <span
-                              key={star}
-                              className="text-sm"
-                              style={{ color: star <= ans.entry.effectiveness_score ? '#f59e0b' : '#cbd5e1' }}
-                            >
-                              ★
-                            </span>
-                          ))}
+                          {[1, 2, 3, 4, 5].map((star) => {
+                            const hoverKey = `${ans.entry.id}-${star}`;
+                            const isHovered = hoverScore !== null && hoverScore.startsWith(ans.entry.id) && star <= parseInt(hoverScore.split('-').pop() || '0');
+                            const isFilled = star <= ans.entry.effectiveness_score;
+                            return (
+                              <button
+                                key={star}
+                                className="text-sm transition-colors focus:outline-none cursor-pointer"
+                                style={{ color: isHovered || isFilled ? '#f59e0b' : '#cbd5e1' }}
+                                onMouseEnter={() => setHoverScore(`${ans.entry.id}-${star}`)}
+                                onMouseLeave={() => setHoverScore(null)}
+                                onClick={() => handleRate(ans.entry.id, star)}
+                                title={`评 ${star} 分`}
+                              >
+                                ★
+                              </button>
+                            );
+                          })}
                           <span className="text-xs text-slate-400 ml-1">
                             {ans.entry.effectiveness_score > 0 ? `${ans.entry.effectiveness_score}/5` : '未评分'}
                           </span>
@@ -1520,35 +1537,8 @@ export function KnowledgeList() {
                 </div>
               </div>
 
-              {/* Rating Section */}
+              {/* Usage Info */}
               <div className="flex items-center gap-6">
-                <div>
-                  <Label className="text-slate-500">效果评分</Label>
-                  <div className="flex items-center gap-1 mt-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        className="text-xl transition-colors focus:outline-none"
-                        style={{
-                          color: star <= (hoverScore || selectedEntry.effectiveness_score)
-                            ? '#f59e0b'
-                            : '#cbd5e1',
-                        }}
-                        onMouseEnter={() => setHoverScore(star)}
-                        onMouseLeave={() => setHoverScore(0)}
-                        onClick={() => handleRate(star)}
-                        title={`评 ${star} 分`}
-                      >
-                        ★
-                      </button>
-                    ))}
-                    <span className="text-sm text-slate-500 ml-2">
-                      {selectedEntry.effectiveness_score > 0
-                        ? `${selectedEntry.effectiveness_score}/5`
-                        : '未评分'}
-                    </span>
-                  </div>
-                </div>
                 <div className="text-sm text-slate-400">
                   使用 {selectedEntry.usage_count} 次 · v{selectedEntry.current_version}
                 </div>
