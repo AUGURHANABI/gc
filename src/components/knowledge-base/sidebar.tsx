@@ -155,6 +155,27 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
             </svg>
           </button>
 
+          {/* Invite code display */}
+          {currentEnterprise?.invite_code && (
+            <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-600/10 border border-cyan-500/20">
+              <span className="text-[11px] text-slate-400 shrink-0">邀请码</span>
+              <span className="text-sm font-mono font-bold text-cyan-400 tracking-wider">{currentEnterprise.invite_code}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(currentEnterprise.invite_code);
+                  const btn = document.activeElement as HTMLButtonElement;
+                  const orig = btn.textContent;
+                  btn.textContent = '已复制';
+                  setTimeout(() => { btn.textContent = orig; }, 1500);
+                }}
+                className="ml-auto text-[11px] text-slate-400 hover:text-cyan-400 transition-colors shrink-0"
+                title="复制邀请码"
+              >
+                复制
+              </button>
+            </div>
+          )}
+
           {showEnterpriseDropdown && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 rounded-lg shadow-lg z-50 overflow-hidden">
               {enterprises.map((ent) => (
@@ -287,7 +308,7 @@ export function Sidebar({ activeTab, onTabChange, isAdmin }: SidebarProps) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
           <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800 mb-4">创建企业</h3>
-            <p className="text-sm text-slate-500 mb-3">创建企业后，您可以邀请团队成员加入</p>
+            <p className="text-sm text-slate-500 mb-3">创建企业后将自动生成邀请码，您可以分享给团队成员</p>
             <input
               type="text"
               value={newEnterpriseName}
