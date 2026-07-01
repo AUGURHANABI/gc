@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useRef } from 'react';
@@ -15,6 +16,8 @@ import {
   fetchKnowledge,
   fetchCategories,
   fetchTags,
+  createCategory,
+  createTag,
   createKnowledge,
   updateKnowledge,
   deleteKnowledge,
@@ -108,6 +111,12 @@ export function KnowledgeList() {
   const [hoverScore, setHoverScore] = useState(0);
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [detailTags, setDetailTags] = useState<string[]>([]);
+  const [showCategoryPopover, setShowCategoryPopover] = useState(false);
+  const [showTagPopover, setShowTagPopover] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newTagName, setNewTagName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [creatingTag, setCreatingTag] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -307,15 +316,69 @@ export function KnowledgeList() {
       await updateKnowledge(selectedEntry.id, {
         category_id: categoryId ?? null,
       });
-      // Update local entries
+      // Update local entries - find the category name for the updated entry
+      const cat = categoryId ? categories.find(c => c.id === categoryId) : null;
       setEntries(prev => prev.map(e =>
-        e.id === selectedEntry.id ? { ...e, category_id: categoryId ?? null } : e
+        e.id === selectedEntry.id ? { ...e, category_id: categoryId ?? null, categories: cat ? { id: cat.id, name: cat.name } : null } : e
       ));
-      setSelectedEntry(prev => prev ? { ...prev, category_id: categoryId ?? null } : prev);
+      setSelectedEntry(prev => prev ? { ...prev, category_id: categoryId ?? null, categories: cat ? { id: cat.id, name: cat.name } : null } : prev);
     } catch {
       // Revert on error
       setDetailCategory(selectedEntry.category_id ?? null);
     }
+  };
+
+  const handleCreateCategoryInline = async () => {
+    if (!newCategoryName.trim()) return;
+    setCreatingCategory(true);
+    try {
+      const res = await createCategory({ name: newCategoryName.trim() });
+      const created: Category = res.data;
+      setCategories(prev => [...prev, created]);
+      // Auto-select the newly created category
+      await handleDetailCategoryChange(created.id);
+      setNewCategoryName('');
+      setShowCategoryPopover(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '创建分类失败');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleCreateTagInline = async () => {
+    if (!newTagName.trim() || !selectedEntry) return;
+    setCreatingTag(true);
+    try {
+      const res = await createTag({ name: newTagName.trim() });
+      const created: Tag = res.data;
+      // Add to tags list
+      const updatedAllTags = [...tags, created];
+      setTags(updatedAllTags);
+      // Auto-add the newly created tag
+      const newTags = [...detailTags, created.id];
+      setDetailTags(newTags);
+      await updateKnowledge(selectedEntry.id, { tag_ids: newTags });
+      const updatedEntryTags = updatedAllTags.filter(t => newTags.includes(t.id));
+      setEntries(prev => prev.map(e =>
+        e.id === selectedEntry.id ? { ...e, tags: updatedEntryTags } : e
+      ));
+      setSelectedEntry(prev => prev ? { ...prev, tags: updatedEntryTags } : prev);
+      setNewTagName('');
+      setShowTagPopover(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '创建标签失败');
+    } finally {
+      setCreatingTag(false);
+    }
+  };
+
+  const handleRemoveCategory = () => {
+    handleDetailCategoryChange(null);
+  };
+
+  const handleRemoveTag = (tagId: string) => {
+    handleDetailTagToggle(tagId);
   };
 
   const handleDetailTagToggle = async (tagId: string) => {
@@ -1017,33 +1080,100 @@ export function KnowledgeList() {
               </div>
 
               {/* Category & Status */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-start gap-4">
                 <div className="flex-1">
-                  <Label className="text-slate-500">分类</Label>
-                  <Select
-                    value={detailCategory || '__none__'}
-                    onValueChange={(v) => {
-                      const newCat = v === '__none__' ? null : v;
-                      setDetailCategory(newCat);
-                      handleDetailCategoryChange(newCat);
-                    }}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="选择分类" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">无分类</SelectItem>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Label className="text-slate-500">分类</Label>
+                    <Popover open={showCategoryPopover} onOpenChange={setShowCategoryPopover}>
+                      <PopoverTrigger asChild>
+                        <button
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-50 text-cyan-600 hover:bg-cyan-100 transition-colors"
+                          title="添加分类"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-2" align="start">
+                        <div className="space-y-1">
+                          {categories.length > 0 && (
+                            <>
+                              <p className="text-xs text-slate-400 px-2 pt-1 pb-0.5">选择已有分类</p>
+                              {categories.map((cat) => (
+                                <button
+                                  key={cat.id}
+                                  className={`w-full text-left px-2 py-1.5 text-sm rounded hover:bg-slate-100 transition-colors flex items-center justify-between ${
+                                    detailCategory === cat.id ? 'bg-cyan-50 text-cyan-700 font-medium' : 'text-slate-700'
+                                  }`}
+                                  onClick={() => {
+                                    handleDetailCategoryChange(cat.id);
+                                    setShowCategoryPopover(false);
+                                  }}
+                                >
+                                  {cat.name}
+                                  {detailCategory === cat.id && (
+                                    <svg className="w-3.5 h-3.5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
+                              ))}
+                              <div className="border-t border-slate-100 my-1" />
+                            </>
+                          )}
+                          <p className="text-xs text-slate-400 px-2 pt-1 pb-0.5">创建新分类</p>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              className="flex-1 h-8 px-2 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                              placeholder="输入分类名称"
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newCategoryName.trim()) {
+                                  handleCreateCategoryInline();
+                                }
+                              }}
+                            />
+                            <button
+                              className="h-8 px-2 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 disabled:opacity-50 transition-colors"
+                              disabled={!newCategoryName.trim() || creatingCategory}
+                              onClick={handleCreateCategoryInline}
+                            >
+                              {creatingCategory ? '...' : '添加'}
+                            </button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {detailCategory ? (
+                      <div className="group relative inline-flex items-center">
+                        <Badge
+                          className="bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors pr-6"
+                        >
+                          {categories.find(c => c.id === detailCategory)?.name || '未知分类'}
+                        </Badge>
+                        <button
+                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-300 text-white hover:bg-red-400 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"
+                          onClick={handleRemoveCategory}
+                          title="移除分类"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-400">未分类</span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-slate-500">状态</Label>
-                  <p className="mt-1">
+                  <p className="mt-2">
                     <Badge variant={selectedEntry.is_active ? 'default' : 'secondary'}>
                       {selectedEntry.is_active ? '启用' : '停用'}
                     </Badge>
@@ -1053,30 +1183,104 @@ export function KnowledgeList() {
 
               {/* Tags */}
               <div>
-                <Label className="text-slate-500">标签</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {tags.map((tag) => {
-                    const isSelected = detailTags.includes(tag.id);
-                    return (
-                      <Badge
-                        key={tag.id}
-                        className={`cursor-pointer select-none transition-opacity ${
-                          isSelected ? 'opacity-100' : 'opacity-40'
-                        }`}
-                        style={{ backgroundColor: tag.color, color: '#fff' }}
-                        onClick={() => {
-                          const newTags = isSelected
-                            ? detailTags.filter((t) => t !== tag.id)
-                            : [...detailTags, tag.id];
-                          handleDetailTagToggle(tag.id);
-                        }}
+                <div className="flex items-center gap-2 mb-2">
+                  <Label className="text-slate-500">标签</Label>
+                  <Popover open={showTagPopover} onOpenChange={setShowTagPopover}>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-50 text-cyan-600 hover:bg-cyan-100 transition-colors"
+                        title="添加标签"
                       >
-                        {tag.name}
-                      </Badge>
-                    );
-                  })}
-                  {tags.length === 0 && (
-                    <span className="text-slate-400 text-sm">暂无标签可选用</span>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <div className="space-y-1">
+                        {tags.length > 0 && (
+                          <>
+                            <p className="text-xs text-slate-400 px-2 pt-1 pb-0.5">选择已有标签</p>
+                            <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+                              {tags.map((tag) => {
+                                const isSelected = detailTags.includes(tag.id);
+                                return (
+                                  <button
+                                    key={tag.id}
+                                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
+                                      isSelected
+                                        ? 'text-white'
+                                        : 'text-white/60 hover:text-white'
+                                    }`}
+                                    style={{ backgroundColor: tag.color }}
+                                    onClick={() => handleDetailTagToggle(tag.id)}
+                                  >
+                                    {isSelected && (
+                                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                    {tag.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="border-t border-slate-100 my-1" />
+                          </>
+                        )}
+                        <p className="text-xs text-slate-400 px-2 pt-1 pb-0.5">创建新标签</p>
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            className="flex-1 h-8 px-2 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                            placeholder="输入标签名称"
+                            value={newTagName}
+                            onChange={(e) => setNewTagName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && newTagName.trim()) {
+                                handleCreateTagInline();
+                              }
+                            }}
+                          />
+                          <button
+                            className="h-8 px-2 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 disabled:opacity-50 transition-colors"
+                            disabled={!newTagName.trim() || creatingTag}
+                            onClick={handleCreateTagInline}
+                          >
+                            {creatingTag ? '...' : '添加'}
+                          </button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {detailTags.length > 0 ? (
+                    detailTags.map((tagId) => {
+                      const tag = tags.find(t => t.id === tagId);
+                      if (!tag) return null;
+                      return (
+                        <div key={tag.id} className="group relative inline-flex items-center">
+                          <Badge
+                            className="text-white pr-5"
+                            style={{ backgroundColor: tag.color }}
+                          >
+                            {tag.name}
+                          </Badge>
+                          <button
+                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-400/80 text-white hover:bg-red-400 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"
+                            onClick={() => handleRemoveTag(tag.id)}
+                            title="移除标签"
+                          >
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <span className="text-sm text-slate-400">无标签</span>
                   )}
                 </div>
               </div>
