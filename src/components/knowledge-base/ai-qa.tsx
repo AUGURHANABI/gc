@@ -58,13 +58,22 @@ export function AIQA() {
 
     try {
       const token = session?.access_token ?? '';
+      const enterpriseId = typeof window !== 'undefined' ? localStorage.getItem('currentEnterpriseId') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['x-session'] = token;
+      if (enterpriseId) headers['x-enterprise-id'] = enterpriseId;
       const response = await fetch('/api/qa', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { 'x-session': token } : {}) },
+        headers,
         body: JSON.stringify({ question: userMessage.content }),
       });
 
-      if (!response.ok) throw new Error('请求失败');
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        let errMsg = '请求失败';
+        try { errMsg = JSON.parse(errBody).error || errMsg; } catch {}
+        throw new Error(errMsg);
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('无法读取响应流');
@@ -151,9 +160,11 @@ export function AIQA() {
   const loadHistory = async () => {
     try {
       const token = session?.access_token ?? '';
-      const res = await fetch('/api/statistics?type=qa_history&page_size=10', {
-        headers: token ? { 'x-session': token } : {},
-      });
+      const enterpriseId = typeof window !== 'undefined' ? localStorage.getItem('currentEnterpriseId') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['x-session'] = token;
+      if (enterpriseId) headers['x-enterprise-id'] = enterpriseId;
+      const res = await fetch('/api/statistics?type=qa_history&page_size=10', { headers });
       const data = await res.json();
       setHistory(data.data ?? []);
       setShowHistory(true);
