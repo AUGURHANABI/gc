@@ -210,7 +210,6 @@ function getSupabaseClient(token?: string): SupabaseClient | null {
   const client = createClient(creds.url, creds.anonKey, {
     global: globalOptions,
     db: { timeout: 15000 },
-    db: { timeout: 15000 },
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
