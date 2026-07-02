@@ -1,5 +1,4 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { getReportBuffer, createWrappedFetch } from 'coze-coding-dev-sdk';
 
 let envLoaded = false;
 let envLoadPromise: Promise<void> | null = null;
@@ -197,18 +196,7 @@ function getSupabaseClient(token?: string): SupabaseClient | null {
     }
     const key = serviceRoleKey ?? creds.anonKey;
 
-    const globalOptions: Record<string, unknown> = {};
-    try {
-      const buffer = getReportBuffer();
-      if (buffer) {
-        globalOptions.fetch = createWrappedFetch(buffer, 'supabase');
-      }
-    } catch {
-      // Silent
-    }
-
     adminClient = createClient(creds.url, key, {
-      global: globalOptions,
       db: { timeout: 15000 },
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -218,18 +206,6 @@ function getSupabaseClient(token?: string): SupabaseClient | null {
   // Return cached token client
   const cached = tokenClients.get(token);
   if (cached) return cached;
-
-  const globalOptions: Record<string, unknown> = {
-    headers: { Authorization: `Bearer ${token}` },
-  };
-  try {
-    const buffer = getReportBuffer();
-    if (buffer) {
-      globalOptions.fetch = createWrappedFetch(buffer, 'supabase');
-    }
-  } catch {
-    // Silent
-  }
 
   const client = createClient(creds.url, creds.anonKey, {
     global: globalOptions,
