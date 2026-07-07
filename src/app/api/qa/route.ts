@@ -56,11 +56,19 @@ export async function POST(req: NextRequest) {
   const askedQuantity = extractQuantity(question);
 
   // ========== 搜索产品报价（报价类问题优先） ==========
-  // 提取产品关键词
-  const productKeywords = question
+  // 提取产品关键词：分离产品名、数量、单位
+  // 先移除数量相关部分（如"200个"、"100套"）
+  let cleanedQuestion = question
+    .replace(/\d+(个|件|套|pcs|Pieces|件套)/gi, '') // 移除数量+单位
+    .replace(/(价格|多少钱|报价|多少|价位|单价|批发价|成本|费用)/g, ''); // 移除报价关键词
+  
+  // 提取剩余的关键词
+  const productKeywords = cleanedQuestion
     .replace(/[^\w\u4e00-\u9fa5]/g, ' ')
     .split(/\s+/)
-    .filter((k: string) => k.length >= 2 && !['价格', '多少钱', '报价', '多少', '价位', '单价', '批发价', '成本', '费用', '个', '件', '套', 'pcs'].includes(k));
+    .filter((k: string) => k.length >= 2);
+
+  console.log('报价搜索关键词:', productKeywords, '原问题:', question);
 
   let products: Array<{
     id: string;
