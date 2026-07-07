@@ -285,36 +285,43 @@ async function searchKnowledge(
   answer: string;
   categories: Array<{ name: string }> | null;
 }> | null> {
-  if (keywords.length > 0) {
-    const promises = keywords.map(async (term: string) => {
-      const { data, error } = await client
-        .from('knowledge_entries')
-        .select('id, question, answer, categories(name)')
-        .eq('is_active', true)
-        .eq('enterprise_id', enterpriseId)
-        .or(`question.ilike.%${term}%,answer.ilike.%${term}%`)
-        .limit(3);
-      
-      if (error) console.error('搜索知识库关键词失败:', term, error.message);
-      return data || [];
-    });
-    
-    const results = await Promise.all(promises);
-    const allEntries = results.flat();
-    return allEntries.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i);
-  }
+  console.log('知识库搜索 - enterpriseId:', enterpriseId);
+  console.log('知识库搜索 - keywords:', keywords);
+  console.log('知识库搜索 - question:', question);
   
-  // 用原始问题搜索
-  const { data, error } = await client
+  // 先获取该企业所有知识库条目，再在内存中过滤
+  const { data: allData, error: allError } = await client
     .from('knowledge_entries')
     .select('id, question, answer, categories(name)')
     .eq('is_active', true)
-    .eq('enterprise_id', enterpriseId)
-    .or(`question.ilike.%${question}%,answer.ilike.%${question}%`)
-    .limit(3);
+    .eq('enterprise_id', enterpriseId);
   
-  if (error) console.error('搜索知识库失败:', error.message);
-  return data;
+  if (allError) {
+    console.error('获取知识库失败:', allError.message);
+    return null;
+  }
+  
+  console.log('知识库搜索 - 总条目数:', allData?.length || 0);
+  
+  if (!allData || allData.length === 0) return null;
+  
+  // 在内存中搜索关键词
+  const searchTerms = keywords.length > 0 ? keywords : [question];
+  const matchedEntries = allData.filter(entry => {
+    const questionText = entry.question || '';
+    const answerText = entry.answer || '';
+    return searchTerms.some(term => 
+      questionText.toLowerCase().includes(term.toLowerCase()) ||
+      answerText.toLowerCase().includes(term.toLowerCase())
+    );
+  });
+  
+  console.log('知识库搜索 - 匹配条目数:', matchedEntries.length);
+  if (matchedEntries.length > 0) {
+    console.log('知识库搜索 - 匹配结果:', matchedEntries.map(e => e.question?.substring(0, 50)));
+  }
+  
+  return matchedEntries.slice(0, 10);
 }
 
 // 搜索产品
