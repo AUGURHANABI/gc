@@ -3,6 +3,23 @@ import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 import { getAuthUser, getEnterpriseId, checkPermission, unauthorizedResponse, forbiddenResponse, checkLicenseExpired } from '@/lib/auth-helpers';
 
+// 判断是否为报价相关问题
+function isPricingQuestion(question: string): boolean {
+  const pricingKeywords = ['价格', '多少钱', '报价', '多少', '价位', '单价', '批发价', '成本', '费用'];
+  const lowerQuestion = question.toLowerCase();
+  return pricingKeywords.some(kw => lowerQuestion.includes(kw));
+}
+
+// 从问题中提取数量信息
+function extractQuantity(question: string): number | null {
+  // 匹配 "100个"、"100件"、"100套"、"100pcs" 等格式
+  const match = question.match(/(\d+)(个|件|套|pcs| Pieces|件套)/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return unauthorizedResponse();
@@ -34,7 +51,185 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ========== 搜索知识库 ==========
+  // ========== 判断问题类型 ==========
+  const isPricing = isPricingQuestion(question);
+  const askedQuantity = extractQuantity(question);
+
+  // ========== 搜索产品报价（报价类问题优先） ==========
+  // 提取产品关键词
+  const productKeywords = question
+    .replace(/[^\w\u4e00-\u9fa5]/g, ' ')
+    .split(/\s+/)
+    .filter((k: string) => k.length >= 2 && !['价格', '多少钱', '报价', '多少', '价位', '单价', '批发价', '成本', '费用', '个', '件', '套', 'pcs'].includes(k));
+
+  let products: Array<{
+    id: string;
+    product_code: string;
+    product_name: string;
+    specifications: string | null;
+    packaging_info: string | null;
+    weight: number | null;
+    dimensions: string | null;
+    box_specs: string | null;
+    remarks_text: string | null;
+    price_ranges: Array<{ min_quantity: number; max_quantity: number | null; price: number; unit: string }> | null;
+  }> | null = null;
+
+  if (productKeywords.length > 0) {
+    const orConditions = productKeywords
+      .map((k: string) => `product_name.ilike.%${k}%,product_code.ilike.%${k}%,specifications.ilike.%${k}%`)
+      .join(',');
+
+    // 先查询产品
+    const { data, error: productError } = await client
+      .from('product_quotations')
+      .select('id, product_code, product_name, specifications, packaging_info, weight, dimensions, box_specs, remarks_text')
+      .eq('enterprise_id', enterpriseId)
+      .or(orConditions)
+      .limit(10);
+
+    // 如果找到产品，再查询价格区间
+    if (data && data.length > 0) {
+      const productIds = data.map(p => p.id);
+      const { data: priceRanges, error: prError } = await client
+        .from('product_price_ranges')
+        .select('quotation_id, min_quantity, max_quantity, price, unit')
+        .in('quotation_id', productIds);
+      
+      if (prError) console.error('查询价格区间失败:', prError.message);
+      
+      // 合并价格区间到产品
+      products = data.map(p => ({
+        ...p,
+        price_ranges: priceRanges?.filter(pr => pr.quotation_id === p.id).map(pr => ({
+          min_quantity: pr.min_quantity,
+          max_quantity: pr.max_quantity,
+          price: parseFloat(String(pr.price)) || 0,
+          unit: pr.unit || 'CNY'
+        })) || null
+      }));
+    } else {
+      products = null;
+    }
+
+    if (productError) console.error('搜索产品失败:', productError.message);
+    products = data as typeof products;
+  }
+
+  // ========== 报价类问题的特殊处理 ==========
+  if (isPricing) {
+    // 如果找到产品，构建报价响应
+    if (products && products.length > 0) {
+      // 找到匹配数量价格的产品
+      const matchedProducts = products.filter(p => p.price_ranges && p.price_ranges.length > 0);
+      
+      if (matchedProducts.length > 0) {
+        // 有价格数据的产品
+        let pricingContext = '【产品报价信息】\n';
+        matchedProducts.forEach((p, i) => {
+          pricingContext += `\n产品${i + 1}: ${p.product_name}`;
+          if (p.specifications) pricingContext += ` (${p.specifications})`;
+          pricingContext += `\n货号: ${p.product_code}`;
+          
+          if (p.price_ranges && p.price_ranges.length > 0) {
+            pricingContext += '\n价格区间:';
+            p.price_ranges.forEach(pr => {
+              const maxQty = pr.max_quantity ? `-${pr.max_quantity}` : '以上';
+              pricingContext += `\n  - ${pr.min_quantity}${maxQty}件: ¥${pr.price}/${pr.unit}`;
+            });
+            
+            // 如果用户问了具体数量，匹配最合适的区间
+            if (askedQuantity) {
+              const matchedRange = p.price_ranges.find(pr => 
+                askedQuantity >= pr.min_quantity && (!pr.max_quantity || askedQuantity <= pr.max_quantity)
+              );
+              if (matchedRange) {
+                const total = askedQuantity * matchedRange.price;
+                pricingContext += `\n  ➤ ${askedQuantity}件对应价格: ¥${matchedRange.price}/${matchedRange.unit}，总价约 ¥${total.toFixed(2)}`;
+              }
+            }
+          }
+          
+          if (p.packaging_info) pricingContext += `\n包装: ${p.packaging_info}`;
+          if (p.dimensions) pricingContext += `\n尺寸: ${p.dimensions}`;
+          if (p.box_specs) pricingContext += `\n箱规: ${p.box_specs}`;
+          if (p.remarks_text) pricingContext += `\n备注: ${p.remarks_text}`;
+        });
+
+        const pricingPrompt = `你是产品报价助手。用户询问产品价格，请根据以下报价数据直接回复，不要延伸或添加市场信息。
+
+回复格式：
+1. 列出找到的产品及其价格区间
+2. 如果用户指定了数量，给出对应价格和总价
+3. 如果有备注信息，简要说明
+4. 回复简洁，不要添加"受材质影响"等通用说明
+
+${pricingContext}`;
+
+        const customHeaders = HeaderUtils.extractForwardHeaders(req.headers);
+        const config = new Config();
+        const llmClient = new LLMClient(config, customHeaders);
+
+        const messages = [
+          { role: 'system' as const, content: pricingPrompt },
+          { role: 'user' as const, content: question },
+        ];
+
+        const stream = llmClient.stream(messages, {
+          model: 'doubao-seed-2-0-lite-260215',
+          temperature: 0.3, // 降低温度使回复更精准
+        });
+
+        return createStreamingResponse(stream, client, enterpriseId, question, null);
+      } else {
+        // 有产品但无价格数据
+        const noPricePrompt = `你是产品报价助手。用户询问产品价格，系统中找到以下产品但暂无定价信息：
+
+找到的产品: ${products.map(p => `${p.product_name}${p.specifications ? ` (${p.specifications})` : ''} - 货号:${p.product_code}`).join('\n')}
+
+请回复：找到该产品，但暂无价格数据，建议联系业务确认最新报价。不要添加市场价格估计或通用说明。`;
+
+        const customHeaders = HeaderUtils.extractForwardHeaders(req.headers);
+        const config = new Config();
+        const llmClient = new LLMClient(config, customHeaders);
+
+        const messages = [
+          { role: 'system' as const, content: noPricePrompt },
+          { role: 'user' as const, content: question },
+        ];
+
+        const stream = llmClient.stream(messages, {
+          model: 'doubao-seed-2-0-lite-260215',
+          temperature: 0.1,
+        });
+
+        return createStreamingResponse(stream, client, enterpriseId, question, null);
+      }
+    } else {
+      // 未找到产品
+      const notFoundPrompt = `你是产品报价助手。用户询问产品价格，但系统中未找到匹配的产品报价信息。
+
+请简洁回复：未找到该产品报价信息，请确认产品名称是否正确，或联系业务部门添加报价数据。不要提供市场价格估计或通用说明。`;
+
+      const customHeaders = HeaderUtils.extractForwardHeaders(req.headers);
+      const config = new Config();
+      const llmClient = new LLMClient(config, customHeaders);
+
+      const messages = [
+        { role: 'system' as const, content: notFoundPrompt },
+        { role: 'user' as const, content: question },
+      ];
+
+      const stream = llmClient.stream(messages, {
+        model: 'doubao-seed-2-0-lite-260215',
+        temperature: 0.1,
+      });
+
+      return createStreamingResponse(stream, client, enterpriseId, question, null);
+    }
+  }
+
+  // ========== 非报价问题：搜索知识库 ==========
   const knowledgeQuery = client
     .from('knowledge_entries')
     .select('id, question, answer, categories(name)')
@@ -46,34 +241,7 @@ export async function POST(req: NextRequest) {
   const { data: entries, error: searchError } = await knowledgeQuery;
   if (searchError) throw new Error(`搜索知识库失败: ${searchError.message}`);
 
-  // ========== 搜索产品报价 ==========
-  // 提取产品关键词（简单匹配：查找包含数字的产品名/货号）
-  const productKeywords = question.replace(/[^\w\u4e00-\u9fa5]/g, ' ').split(/\s+/).filter((k: string) => k.length >= 2);
-  
-  // 搜索产品：按产品名称或货号匹配
-  let products: unknown[] | null = null;
-  
-  if (productKeywords.length > 0) {
-    const orConditions = productKeywords
-      .map((k: string) => `product_name.ilike.%${k}%,product_code.ilike.%${k}%,specifications.ilike.%${k}%`)
-      .join(',');
-    
-    const { data, error: productError } = await client
-      .from('product_quotations')
-      .select(`
-        id, product_code, product_name, specifications, packaging_info, 
-        weight, dimensions, box_specs, remarks_text,
-        price_ranges:min_quantity,max_quantity,price,unit
-      `)
-      .eq('enterprise_id', enterpriseId)
-      .or(orConditions)
-      .limit(5);
-    
-    if (productError) console.error('搜索产品失败:', productError.message);
-    products = data;
-  }
-
-  // ========== 搜索历史问答 ==========
+  // 搜索历史问答
   const { data: historyEntries } = await client
     .from('qa_history')
     .select('question, answer')
@@ -97,40 +265,15 @@ export async function POST(req: NextRequest) {
       .join('\n\n');
   }
 
-  // 产品报价上下文
+  // 产品信息（非报价查询时仅展示基本信息）
   if (products && products.length > 0) {
-    context += '\n\n【产品报价信息】\n';
-    context += (products as Array<Record<string, unknown>>)
+    context += '\n\n【相关产品信息】\n';
+    context += products
       .map((p, i) => {
-        const product = p as {
-          product_code: string;
-          product_name: string;
-          specifications: string | null;
-          packaging_info: string | null;
-          weight: number | null;
-          dimensions: string | null;
-          box_specs: string | null;
-          remarks_text: string | null;
-          price_ranges: Array<{ min_quantity: number; max_quantity: number | null; price: number; unit: string }> | null;
-        };
-        
-        let info = `[产品${i + 1}] 货号: ${product.product_code}\n名称: ${product.product_name}`;
-        if (product.specifications) info += `\n规格: ${product.specifications}`;
-        if (product.packaging_info) info += `\n包装: ${product.packaging_info}`;
-        if (product.weight) info += `\n重量: ${product.weight}kg`;
-        if (product.dimensions) info += `\n尺寸: ${product.dimensions}`;
-        if (product.box_specs) info += `\n箱规: ${product.box_specs}`;
-        if (product.remarks_text) info += `\n备注: ${product.remarks_text}`;
-        
-        // 价格区间
-        if (product.price_ranges && product.price_ranges.length > 0) {
-          info += '\n价格区间:';
-          product.price_ranges.forEach((pr, idx) => {
-            const maxQty = pr.max_quantity ? `-${pr.max_quantity}` : '以上';
-            info += `\n  - ${pr.min_quantity}${maxQty}件: ¥${pr.price}/${pr.unit}`;
-          });
-        }
-        
+        let info = `[产品${i + 1}] ${p.product_name}`;
+        if (p.specifications) info += ` (${p.specifications})`;
+        info += `\n货号: ${p.product_code}`;
+        if (p.packaging_info) info += `\n包装: ${p.packaging_info}`;
         return info;
       })
       .join('\n\n');
@@ -146,18 +289,8 @@ export async function POST(req: NextRequest) {
       .join('\n\n');
   }
 
-  // ========== 构建系统提示 ==========
-  const systemPrompt = `你是一位专业的询盘话术顾问，同时也具备产品报价能力。你的任务是根据用户的问题，提供精准专业的询盘回复或报价信息。
-
-能力范围：
-1. **报价咨询** - 当用户询问产品价格时，参考产品报价信息，根据询问的数量给出对应价格区间
-2. **产品信息** - 当用户询问产品规格、包装、尺寸等信息时，从产品报价中提取并呈现
-3. **话术生成** - 当用户需要回复客户询盘时，生成专业、礼貌、有说服力的中文回复
-
-报价规则：
-- 根据用户提到的数量，匹配价格区间并报价
-- 如果数量不在区间内，告知用户联系业务确认
-- 报价时说明产品名称、规格、价格和单位
+  // ========== 构建系统提示（非报价模式） ==========
+  const systemPrompt = `你是一位专业的询盘话术顾问，根据用户的问题提供精准回复。
 
 回复要求：
 1. 回复必须专业、礼貌，使用中文
@@ -167,7 +300,6 @@ export async function POST(req: NextRequest) {
 5. 不要使用"Dear"等英文称呼，直接用中文问候语
 ${context ? `\n\n以下是从系统中匹配到的参考信息：\n${context}` : '\n\n注意：系统中暂无匹配的参考信息，请根据你的专业知识回复，或提示用户提供更多细节。'}`;
 
-  // Call LLM with streaming
   const customHeaders = HeaderUtils.extractForwardHeaders(req.headers);
   const config = new Config();
   const llmClient = new LLMClient(config, customHeaders);
@@ -182,6 +314,18 @@ ${context ? `\n\n以下是从系统中匹配到的参考信息：\n${context}` :
     temperature: 0.7,
   });
 
+  return createStreamingResponse(stream, client, enterpriseId, question, matchedEntryId);
+}
+
+// 创建流式响应的辅助函数
+function createStreamingResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  stream: AsyncGenerator<any>,
+  client: ReturnType<typeof getSupabaseClientOrThrow>,
+  enterpriseId: string,
+  question: string,
+  matchedEntryId: string | null
+) {
   const encoder = new TextEncoder();
   const readableStream = new ReadableStream({
     async start(controller) {
