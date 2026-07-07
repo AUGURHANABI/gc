@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser, getEnterpriseId, checkLicenseExpired, checkPermission } from '@/lib/auth-helpers';
 import { getSupabaseClientOrThrow } from '@/storage/database/supabase-client';
+import * as XLSX from 'xlsx';
 
 // 解析 CSV 行，正确处理引号内的逗号
 function parseCSVLine(line: string): string[] {
@@ -74,24 +75,53 @@ function parseExcelHTML(content: string): string[][] {
   return rows;
 }
 
+// 解析 XLSX 格式（使用 xlsx 库）
+async function parseXLSX(file: File): Promise<string[][]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  
+  // 获取第一个工作表
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  
+  // 转换为二维数组（使用 unknown 类型因为单元格可能是多种类型）
+  const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+  
+  // 处理每个单元格，确保是字符串
+  return data.map(row => 
+    (row as unknown[]).map(cell => {
+      if (cell === null || cell === undefined) return '';
+      if (typeof cell === 'number') return String(cell);
+      if (typeof cell === 'boolean') return String(cell);
+      // 处理 Date 对象
+      if (typeof cell === 'object' && cell.constructor.name === 'Date') {
+        return (cell as Date).toLocaleDateString();
+      }
+      return String(cell).trim();
+    })
+  );
+}
+
 // 解析文件内容
 async function parseFile(file: File): Promise<string[][]> {
   const fileName = file.name.toLowerCase();
-  const content = await file.text();
 
   // 检测文件类型
   if (fileName.endsWith('.csv')) {
     // CSV 格式
+    const content = await file.text();
     const lines = content.split('\n').filter(line => line.trim());
     return lines.map(parseCSVLine);
   } else if (fileName.endsWith('.xls')) {
     // Excel HTML 格式
+    const content = await file.text();
     return parseExcelHTML(content);
   } else if (fileName.endsWith('.xlsx')) {
-    // XLSX 格式需要特殊处理，暂时不支持
-    throw new Error('XLSX 格式暂不支持，请转换为 CSV 或 XLS 格式');
+    // XLSX 格式（使用 xlsx 库）
+    return parseXLSX(file);
   } else {
     // 尝试检测内容格式
+    const content = await file.text();
     if (content.includes('<table') || content.includes('<tr')) {
       return parseExcelHTML(content);
     } else {
