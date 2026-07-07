@@ -43,19 +43,34 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Global session promise - set by auth-context, consumed by api.ts
+// Global session state - set by auth-context, consumed by api.ts
+let cachedToken: string | null = null;
 let sessionReadyResolve: ((token: string | null) => void) | null = null;
 let sessionReadyPromise: Promise<string | null> = new Promise((resolve) => {
   sessionReadyResolve = resolve;
 });
 
-/** Called by api.ts to wait for session */
+/** Called by api.ts to wait for session (with 3s timeout) */
 export async function waitForSessionToken(): Promise<string | null> {
-  return sessionReadyPromise;
+  // If we already have a cached token, return immediately
+  if (cachedToken) {
+    return cachedToken;
+  }
+  
+  // Wait for session with timeout
+  const timeoutPromise = new Promise<string | null>((resolve) => {
+    setTimeout(() => resolve(null), 3000);
+  });
+  
+  const token = await Promise.race([sessionReadyPromise, timeoutPromise]);
+  return token;
 }
 
 /** Called by auth-context when session state changes */
 export function notifySessionReady(token: string | null) {
+  // Cache the token for immediate access
+  cachedToken = token;
+  
   // Resolve the CURRENT promise first (before creating new one)
   if (sessionReadyResolve) {
     sessionReadyResolve(token);
