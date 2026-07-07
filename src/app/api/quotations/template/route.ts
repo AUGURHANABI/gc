@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser, getEnterpriseId, checkLicenseExpired } from '@/lib/auth-helpers';
 
-// GET: 下载报价导入模板 (Excel格式)
+// 将值转换为 CSV 格式，必要时添加引号
+function toCSVValue(value: string): string {
+  // 如果值包含逗号、引号或换行符，需要用引号包裹
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    // 转义内部引号（双引号转义）
+    return '"' + value.replace(/"/g, '""') + '"';
+  }
+  return value;
+}
+
+// GET: 下载报价导入模板 (CSV格式)
 export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) {
@@ -17,7 +27,7 @@ export async function GET(req: NextRequest) {
   const licenseErr = await checkLicenseExpired(enterpriseId);
   if (licenseErr) return licenseErr;
 
-  // 生成简单的CSV模板内容（前端会转为Excel）
+  // 生成 CSV 模板内容
   const headers = [
     '产品货号*',
     '产品名称*',
@@ -41,10 +51,11 @@ export async function GET(req: NextRequest) {
     '区间3货币',
   ];
 
+  // 示例数据（包含逗号的值展示正确的 CSV 格式）
   const exampleRow = [
     'SKU001',
     '硅胶密封圈',
-    '直径50mm，厚度3mm',
+    '直径50mm,厚度3mm',  // 包含逗号，会被引号包裹
     'PE袋包装',
     '0.05',
     '50x50x3mm',
@@ -64,15 +75,15 @@ export async function GET(req: NextRequest) {
     'CNY',
   ];
 
-  const csvContent = [
-    headers.join(','),
-    exampleRow.join(','),
-  ].join('\n');
+  // 构建 CSV 内容
+  const headerLine = headers.map(toCSVValue).join(',');
+  const exampleLine = exampleRow.map(toCSVValue).join(',');
+  const csvContent = `${headerLine}\n${exampleLine}`;
 
-  // 返回CSV，前端可以下载
+  // 返回 CSV 文件
   return new NextResponse(csvContent, {
     headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Type': 'text/csv; charset=utf-8-sig', // utf-8-sig 添加 BOM，Excel 兼容
       'Content-Disposition': 'attachment; filename="quotation_template.csv"',
     },
   });
