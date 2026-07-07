@@ -24,12 +24,26 @@ function extractQuantity(question: string): number | null {
   return null;
 }
 
-// 提取搜索关键词
-function extractKeywords(question: string): string[] {
-  // 移除数量和常见无关词
+// 提取产品搜索关键词（移除价格词，只保留产品名）
+function extractProductKeywords(question: string): string[] {
+  // 移除数量和价格关键词，提取纯产品名
   const cleanedQuestion = question
     .replace(/\d+(个|件|套|pcs|Pieces|件套)/gi, '')
-    .replace(/(价格|多少钱|报价|价位|单价|批发价|成本|费用|可以|怎么|请问|你好|在吗|有没有|帮我|我想)/g, '');
+    .replace(/(价格|多少钱|报价|价位|单价|批发价|成本|费用)/g, '')
+    .replace(/(可以|怎么|请问|你好|在吗|有没有|帮我|我想|什么)/g, '');
+  
+  return cleanedQuestion
+    .replace(/[^\w\u4e00-\u9fa5]/g, ' ')
+    .split(/\s+/)
+    .filter((k: string) => k.length >= 2);
+}
+
+// 提取知识库搜索关键词（保留价格词，用于匹配话术）
+function extractKnowledgeKeywords(question: string): string[] {
+  // 移除数量但保留价格关键词，用于匹配价格相关话术
+  const cleanedQuestion = question
+    .replace(/\d+(个|件|套|pcs|Pieces|件套)/gi, '')
+    .replace(/(可以|怎么|请问|你好|在吗|有没有|帮我|我想|什么)/g, '');
   
   return cleanedQuestion
     .replace(/[^\w\u4e00-\u9fa5]/g, ' ')
@@ -67,20 +81,21 @@ export async function POST(req: NextRequest) {
   }
 
   // ========== 并行搜索知识库和产品 ==========
-  const keywords = extractKeywords(question);
+  const productKeywords = extractProductKeywords(question); // 产品搜索用（纯产品名）
+  const knowledgeKeywords = extractKnowledgeKeywords(question); // 知识库搜索用（保留价格词）
   const askedQuantity = extractQuantity(question);
   const isExplicitPricing = isExplicitPricingQuestion(question);
 
-  console.log('问题分析:', { question, keywords, askedQuantity, isExplicitPricing });
+  console.log('问题分析:', { question, productKeywords, knowledgeKeywords, askedQuantity, isExplicitPricing });
 
   // 并行执行所有搜索
   const [knowledgeResults, productResults, historyResults] = await Promise.all([
-    // 搜索知识库
-    searchKnowledge(client, enterpriseId, keywords, question),
-    // 搜索产品
-    searchProducts(client, enterpriseId, keywords),
-    // 搜索历史问答
-    searchHistory(client, enterpriseId, keywords, question),
+    // 搜索知识库（用保留价格词的关键词）
+    searchKnowledge(client, enterpriseId, knowledgeKeywords, question),
+    // 搜索产品（用纯产品名关键词）
+    searchProducts(client, enterpriseId, productKeywords),
+    // 搜索历史问答（用保留价格词的关键词）
+    searchHistory(client, enterpriseId, knowledgeKeywords, question),
   ]);
 
   const entries = knowledgeResults;
