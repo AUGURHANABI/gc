@@ -98,6 +98,9 @@ importers:
       '@supabase/supabase-js':
         specifier: 2.95.3
         version: 2.95.3
+      '@tailwindcss/postcss':
+        specifier: ^4.1.18
+        version: 4.1.18
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -170,6 +173,9 @@ importers:
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.0
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.1.18
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -189,9 +195,6 @@ importers:
       '@react-dev-inspector/middleware':
         specifier: ^2.0.1
         version: 2.0.1(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.12)(postcss@8.5.6))
-      '@tailwindcss/postcss':
-        specifier: ^4.1.18
-        version: 4.1.18
       '@types/node':
         specifier: ^20
         version: 20.19.30
@@ -219,9 +222,6 @@ importers:
       shadcn:
         specifier: latest
         version: 3.7.0(@cfworker/json-schema@4.1.1)(@types/node@20.19.30)(hono@4.11.7)(typescript@5.9.3)
-      tailwindcss:
-        specifier: ^4.1.18
-        version: 4.1.18
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
