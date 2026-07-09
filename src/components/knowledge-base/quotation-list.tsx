@@ -1,7 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { usePermissions } from '@/lib/permission-context';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 import {
   fetchQuotations,
   createQuotation,
@@ -501,6 +507,16 @@ function QuotationDialog({
   );
 }
 
+// 产品分组类型
+interface ProductGroup {
+  productName: string;
+  specs: ProductQuotation[];
+  specCount: number;
+  priceMin: number;
+  priceMax: number;
+  priceUnit: string;
+}
+
 // 主组件
 export default function QuotationList() {
   const { hasPermission } = usePermissions();
@@ -523,6 +539,56 @@ export default function QuotationList() {
   const canDelete = hasPermission('quotation:delete');
   const canImport = hasPermission('quotation:import');
   const canExport = hasPermission('quotation:export');
+
+  // 按产品名称分组
+  const productGroups = useMemo((): ProductGroup[] => {
+    const groups = new Map<string, ProductQuotation[]>();
+    quotations.forEach(q => {
+      const key = q.product_name;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(q);
+    });
+    return Array.from(groups.entries()).map(([productName, specs]) => {
+      let priceMin = Infinity;
+      let priceMax = -Infinity;
+      let priceUnit = 'CNY';
+      specs.forEach(s => {
+        s.price_ranges.forEach(pr => {
+          if (pr.price < priceMin) { priceMin = pr.price; priceUnit = pr.unit; }
+          if (pr.price > priceMax) priceMax = pr.price;
+        });
+      });
+      return {
+        productName,
+        specs,
+        specCount: specs.length,
+        priceMin: priceMin === Infinity ? 0 : priceMin,
+        priceMax: priceMax === -Infinity ? 0 : priceMax,
+        priceUnit,
+      };
+    });
+  }, [quotations]);
+
+  // 搜索时自动展开匹配规格的分组
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!search.trim()) {
+      setExpandedGroups([]);
+      return;
+    }
+    const term = search.toLowerCase();
+    const toExpand: string[] = [];
+    productGroups.forEach((group, idx) => {
+      const hasSpecMatch = group.specs.some(
+        s =>
+          (s.specifications && s.specifications.toLowerCase().includes(term)) ||
+          s.product_code.toLowerCase().includes(term)
+      );
+      if (hasSpecMatch) toExpand.push(`group-${idx}`);
+    });
+    setExpandedGroups(toExpand);
+  }, [search, productGroups]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -633,10 +699,20 @@ export default function QuotationList() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === quotations.length) {
+    const allIds = quotations.map(q => q.id);
+    if (selectedIds.length === allIds.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(quotations.map(q => q.id));
+      setSelectedIds(allIds);
+    }
+  };
+
+  const toggleGroupSelect = (specIds: string[]) => {
+    const allSelected = specIds.every(id => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !specIds.includes(id)));
+    } else {
+      setSelectedIds(prev => [...new Set([...prev, ...specIds])]);
     }
   };
 
@@ -708,90 +784,157 @@ export default function QuotationList() {
       {/* 列表 */}
       {loading ? (
         <div className="p-8 text-center text-muted-foreground">加载中...</div>
-      ) : quotations.length === 0 ? (
+      ) : productGroups.length === 0 ? (
         <div className="p-8 text-center text-muted-foreground">
           {search ? '未找到匹配的报价' : '暂无报价数据'}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="px-3 py-3 text-left w-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === quotations.length && quotations.length > 0}
-                    onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                </th>
-                <th className="px-3 py-3 text-left font-medium">货号</th>
-                <th className="px-3 py-3 text-left font-medium">名称</th>
-                <th className="px-3 py-3 text-left font-medium">规格</th>
-                <th className="px-3 py-3 text-left font-medium">价格区间</th>
-                <th className="px-3 py-3 text-left font-medium">箱规</th>
-                <th className="px-3 py-3 text-left font-medium">更新时间</th>
-                <th className="px-3 py-3 text-left font-medium w-20">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {quotations.map(q => (
-                <tr key={q.id} className="hover:bg-muted/30">
-                  <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(q.id)}
-                      onChange={() => toggleSelect(q.id)}
-                      className="h-4 w-4 rounded border-border"
-                    />
-                  </td>
-                  <td className="px-3 py-3 font-medium">{q.product_code}</td>
-                  <td className="px-3 py-3">{q.product_name}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{q.specifications || '-'}</td>
-                  <td className="px-3 py-3">
-                    {q.price_ranges.length > 0 ? (
-                      <div className="space-y-0.5">
-                        {q.price_ranges.slice(0, 2).map((pr, i) => (
-                          <div key={i} className="text-xs">
-                            {pr.min_quantity}-{pr.max_quantity || '∞'}: {pr.price} {pr.unit}
-                          </div>
-                        ))}
-                        {q.price_ranges.length > 2 && (
-                          <div className="text-xs text-muted-foreground">+{q.price_ranges.length - 2} 更多区间</div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">{q.box_specs || '-'}</td>
-                  <td className="px-3 py-3 text-muted-foreground">
-                    {new Date(q.updated_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      {canEdit && (
-                        <button
-                          onClick={() => handleEdit(q)}
-                          className="text-primary hover:text-primary/80 text-xs"
-                        >
-                          编辑
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          onClick={() => handleDelete(q.id)}
-                          className="text-destructive hover:text-destructive/80 text-xs"
-                        >
-                          删除
-                        </button>
-                      )}
+        <div className="space-y-2">
+          {/* 全选栏 */}
+          <div className="flex items-center gap-3 px-4 py-2 bg-muted/20 rounded-lg border border-border">
+            <input
+              type="checkbox"
+              checked={quotations.length > 0 && selectedIds.length === quotations.length}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm text-muted-foreground">
+              {selectedIds.length > 0 ? `已选 ${selectedIds.length} 项` : '全选'}
+            </span>
+          </div>
+
+          {/* 分组折叠列表 */}
+          <Accordion
+            type="multiple"
+            value={expandedGroups}
+            onValueChange={setExpandedGroups}
+            className="rounded-lg border border-border overflow-hidden"
+          >
+            {productGroups.map((group, idx) => {
+              const groupValue = `group-${idx}`;
+              const groupSpecIds = group.specs.map(s => s.id);
+              const allGroupSelected = groupSpecIds.every(id => selectedIds.includes(id));
+              const someGroupSelected = groupSpecIds.some(id => selectedIds.includes(id)) && !allGroupSelected;
+
+              return (
+                <AccordionItem key={groupValue} value={groupValue}>
+                  {/* 分组头：汇总信息 */}
+                  <AccordionTrigger className="px-4 py-3 hover:bg-muted/20 hover:no-underline [&[data-state=open]]:bg-muted/10 group">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <span
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleGroupSelect(groupSpecIds);
+                        }}
+                        className="inline-flex items-center shrink-0"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={allGroupSelected}
+                          readOnly
+                          ref={el => {
+                            if (el) el.indeterminate = someGroupSelected;
+                          }}
+                          className="h-4 w-4 rounded border-border pointer-events-none"
+                        />
+                      </span>
+                      <span className="font-semibold text-sm text-foreground truncate">
+                        {group.productName}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 bg-muted rounded-full text-muted-foreground shrink-0">
+                        {group.specCount} 规格
+                      </span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">
+                        {group.specs.map(s => s.product_code).filter((v, i, a) => a.indexOf(v) === i).join(' / ')}
+                      </span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground mr-4 shrink-0">
+                      <span className="hidden md:inline">
+                        {group.priceMin.toFixed(2)} - {group.priceMax.toFixed(2)} {group.priceUnit}
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+
+                  {/* 展开的规格明细表 */}
+                  <AccordionContent className="px-0">
+                    <div className="overflow-x-auto border-t border-border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/20">
+                          <tr>
+                            <th className="px-4 py-2 text-left w-10"></th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground">货号</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground">规格</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground">价格区间</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground">箱规</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground hidden md:table-cell">包装</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground hidden lg:table-cell">更新时间</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground w-20">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {group.specs.map(q => (
+                            <tr key={q.id} className="hover:bg-muted/20 transition-colors">
+                              <td className="px-4 py-2.5">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(q.id)}
+                                  onChange={() => toggleSelect(q.id)}
+                                  className="h-4 w-4 rounded border-border"
+                                />
+                              </td>
+                              <td className="px-3 py-2.5 font-medium text-xs">{q.product_code}</td>
+                              <td className="px-3 py-2.5 text-muted-foreground text-xs">{q.specifications || '-'}</td>
+                              <td className="px-3 py-2.5">
+                                {q.price_ranges.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    {q.price_ranges.slice(0, 2).map((pr, i) => (
+                                      <div key={i} className="text-xs whitespace-nowrap">
+                                        {pr.min_quantity}-{pr.max_quantity || '∞'}: {pr.price} {pr.unit}
+                                      </div>
+                                    ))}
+                                    {q.price_ranges.length > 2 && (
+                                      <div className="text-xs text-muted-foreground">+{q.price_ranges.length - 2} 更多</div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">-</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-muted-foreground text-xs">{q.box_specs || '-'}</td>
+                              <td className="px-3 py-2.5 text-muted-foreground text-xs hidden md:table-cell">{q.packaging_info || '-'}</td>
+                              <td className="px-3 py-2.5 text-muted-foreground text-xs hidden lg:table-cell">
+                                {new Date(q.updated_at).toLocaleDateString()}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center gap-1">
+                                  {canEdit && (
+                                    <button
+                                      onClick={() => handleEdit(q)}
+                                      className="text-primary hover:text-primary/80 text-xs px-1"
+                                    >
+                                      编辑
+                                    </button>
+                                  )}
+                                  {canDelete && (
+                                    <button
+                                      onClick={() => handleDelete(q.id)}
+                                      className="text-destructive hover:text-destructive/80 text-xs px-1"
+                                    >
+                                      删除
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
         </div>
       )}
 
